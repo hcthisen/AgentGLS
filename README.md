@@ -37,6 +37,8 @@ Bootstrap now does the host installation only:
 - installs Docker, Caddy, Node.js, and the local services
 - writes `/opt/agentos/.env`
 - creates `/opt/agentos/runtime/{human,goalloop,scheduled,summary}`
+- applies SQL migrations after PostgreSQL and PostgREST start
+- installs cron jobs for watchdog, GoalLoop, summaries, and projection sync
 - exposes the dashboard immediately on `VPS_IP:3000`
 
 The normal operator flow is now:
@@ -85,7 +87,49 @@ The onboarding flow installs the selected CLI, then guides auth through the web 
 
 Device auth is the recommended Codex path for remote VPS installs because it does not depend on a local browser session on the server itself.
 
-This repo is being updated in phases. Until later phases land, some implementation details still reflect the older GoalLoop migration in progress.
+## Telegram Bot API Setup
+
+Telegram is now provider-neutral. The runtime uses the Bot API bridge in this repo instead of the old Claude Telegram plugin path.
+
+1. Create a bot with `@BotFather`
+2. Store the token during onboarding or with:
+
+```bash
+sudo -u agentos /opt/agentos/scripts/telegram-setup.sh
+```
+
+3. Send a message to the bot from your operator account
+4. Approve the pairing code with `python3 /opt/agentos/scripts/telegram-bridge.py pair <CODE>`
+
+Useful bridge commands:
+
+```bash
+python3 /opt/agentos/scripts/telegram-bridge.py status
+python3 /opt/agentos/scripts/telegram-bridge.py list-pending
+python3 /opt/agentos/scripts/telegram-bridge.py list-allowed
+tail -f /opt/agentos/logs/telegram-bridge.log
+```
+
+## Operations
+
+The runtime no longer depends on a permanently running Claude or Codex UI inside tmux. Human chat, GoalLoop heartbeats, scheduled tasks, and summaries all execute as resumable headless turns through `scripts/provider-run.sh`.
+
+Useful commands:
+
+```bash
+bash /opt/agentos/scripts/status.sh
+tmux attach -t agent
+tmux attach -t goalloop
+tail -f /opt/agentos/logs/goalloop-heartbeat.log
+tail -f /opt/agentos/logs/goalloop-sync.log
+python3 -m unittest discover -s /opt/agentos/tests
+```
+
+The `agent` tmux session is the human-facing operational shell. The `goalloop` tmux session is the autonomous GoalLoop shell where heartbeat turns are injected for operator visibility.
+
+## Migration Note
+
+Older installs that used the Claude Telegram plugin should migrate to the Bot API bridge in this repo. The Claude plugin is no longer part of the required runtime path for AgentGLS.
 
 ## Reference Repos
 

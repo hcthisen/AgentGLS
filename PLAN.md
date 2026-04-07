@@ -592,8 +592,8 @@ Add the GoalLoop runtime directories, templates, and canonical operational instr
 
 ### Tasks
 
-- [ ] In bootstrap, install `python3-yaml`.
-- [ ] Create GoalLoop dirs:
+- [x] In bootstrap, install `python3-yaml`.
+- [x] Create GoalLoop dirs:
 
 ```bash
 /opt/agentos/goals/
@@ -605,13 +605,13 @@ Add the GoalLoop runtime directories, templates, and canonical operational instr
 └── locks/
 ```
 
-- [ ] Create runtime files if absent:
+- [x] Create runtime files if absent:
   - `/opt/agentos/goals/_runbook.md`
   - `/opt/agentos/goals/_context.md`
-- [ ] Add starter templates in repo + copy to `/opt/agentos/goals/templates/` if missing.
-- [ ] Add `config/runtime-agents.md` as the canonical operational protocol.
-- [ ] Add `config/claude-shim.md` for the VPS `CLAUDE.md` shim.
-- [ ] Bootstrap should write:
+- [x] Add starter templates in repo + copy to `/opt/agentos/goals/templates/` if missing.
+- [x] Add `config/runtime-agents.md` as the canonical operational protocol.
+- [x] Add `config/claude-shim.md` for the VPS `CLAUDE.md` shim.
+- [x] Bootstrap should write:
   - `/opt/agentos/AGENTS.md` from the canonical runtime instructions
   - `/opt/agentos/CLAUDE.md` from the shim importing `@AGENTS.md`
 
@@ -619,24 +619,24 @@ Add the GoalLoop runtime directories, templates, and canonical operational instr
 
 The canonical runtime instructions must include:
 
-- [ ] GoalLoop protocol from v6
-- [ ] provider-neutral human chat rules
-- [ ] explicit use of `goalmeta.py` for front matter
-- [ ] explicit use of `send-telegram.sh` / bridge model
-- [ ] draft/approve/manual-run/pause/resume flows
-- [ ] output verification states in run logs
-- [ ] lock usage for shared surfaces
-- [ ] no auth/token extraction from provider directories
+- [x] GoalLoop protocol from v6
+- [x] provider-neutral human chat rules
+- [x] explicit use of `goalmeta.py` for front matter
+- [x] explicit use of `send-telegram.sh` / bridge model
+- [x] draft/approve/manual-run/pause/resume flows
+- [x] output verification states in run logs
+- [x] lock usage for shared surfaces
+- [x] no auth/token extraction from provider directories
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
-- [ ] `/opt/agentos/AGENTS.md` is canonical on the VPS.
-- [ ] `/opt/agentos/CLAUDE.md` only imports it plus minimal Claude-only notes.
-- [ ] GoalLoop dirs/templates exist.
+- [x] `/opt/agentos/AGENTS.md` is canonical on the VPS.
+- [x] `/opt/agentos/CLAUDE.md` only imports it plus minimal Claude-only notes.
+- [x] GoalLoop dirs/templates exist.
 
 ---
 
@@ -648,23 +648,23 @@ Add one deterministic parser/mutator for all goal file operations.
 
 ### Commands to support
 
-- [ ] `get <file> <field>`
-- [ ] `set <file> <field> <value>`
-- [ ] `claim <active_dir>`
-- [ ] `finalize <file>`
-- [ ] `complete <file> <completed_dir>`
-- [ ] `pause <file> <paused_dir>`
-- [ ] `criteria <file>`
-- [ ] `scoreboard <file>`
-- [ ] `check-runnable <file>`
-- [ ] `reconcile-parent <parent_file> <active_dir>`
+- [x] `get <file> <field>`
+- [x] `set <file> <field> <value>`
+- [x] `claim <active_dir>`
+- [x] `finalize <file>`
+- [x] `complete <file> <completed_dir>`
+- [x] `pause <file> <paused_dir>`
+- [x] `criteria <file>`
+- [x] `scoreboard <file>`
+- [x] `check-runnable <file>`
+- [x] `reconcile-parent <parent_file> <active_dir>`
 
 ### Implementation rules
 
-- [ ] PyYAML required. No fallback parser.
-- [ ] atomic writes = temp file + rename
-- [ ] `claim` uses global lock `/opt/agentos/goals/locks/_claim.lock`
-- [ ] `claim` must atomically:
+- [x] PyYAML required. No fallback parser.
+- [x] atomic writes = temp file + rename
+- [x] `claim` uses global lock `/opt/agentos/goals/locks/_claim.lock`
+- [x] `claim` must atomically:
   - recover stale `running` goals older than 2h
   - pick best eligible leaf
   - set `run_state: running`
@@ -679,12 +679,12 @@ Add one deterministic parser/mutator for all goal file operations.
 
 ### Ranking rules
 
-- [ ] priority order: `critical`, `high`, `medium`, `low`
-- [ ] boost measurement-due goals
-- [ ] boost near deadlines:
+- [x] priority order: `critical`, `high`, `medium`, `low`
+- [x] boost measurement-due goals
+- [x] boost near deadlines:
   - under 24h = strong boost
   - under 72h = moderate boost
-- [ ] enforce:
+- [x] enforce:
   - `brief_status: approved`
   - `approval_policy: manual` requires `approved_for_next_run: true`
   - `next_eligible_at`
@@ -693,13 +693,13 @@ Add one deterministic parser/mutator for all goal file operations.
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
-- [ ] `claim` returns JSON with slug/file/run_id/rank or nothing eligible.
-- [ ] `finalize/complete/pause` are path-safe.
-- [ ] criteria + scoreboard extraction are section-scoped and reliable.
+- [x] `claim` returns JSON with slug/file/run_id/rank or nothing eligible.
+- [x] `finalize/complete/pause` are path-safe.
+- [x] criteria + scoreboard extraction are section-scoped and reliable.
 
 ---
 
@@ -716,16 +716,16 @@ Run GoalLoop on either provider using the shared `provider-run.sh` adapter.
 
 ### Heartbeat tasks
 
-- [ ] ensure `goalloop` tmux shell exists
-- [ ] claim one eligible goal via `goalmeta.py claim`
-- [ ] build the GoalLoop prompt file
-- [ ] execute the turn by sending a provider-run command into the `goalloop` shell session
-- [ ] do **not** depend on a permanently running Claude/Codex UI process
-- [ ] instruct the runtime to run exactly one of:
+- [x] ensure `goalloop` tmux shell exists
+- [x] claim one eligible goal via `goalmeta.py claim`
+- [x] build the GoalLoop prompt file
+- [x] execute the turn by sending a provider-run command into the `goalloop` shell session
+- [x] do **not** depend on a permanently running Claude/Codex UI process
+- [x] instruct the runtime to run exactly one of:
   - `goalmeta.py finalize`
   - `goalmeta.py complete`
   - `goalmeta.py pause`
-- [ ] log claimed goal, run ID, success/failure
+- [x] log claimed goal, run ID, success/failure
 
 ### Important implementation rule
 
@@ -739,13 +739,13 @@ provider-run.sh goalloop /tmp/goalloop-prompt.XXXX
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
 - [ ] heartbeat works with Claude selected.
 - [ ] heartbeat works with Codex selected.
-- [ ] exactly one eligible leaf goal is claimed per run.
+- [x] exactly one eligible leaf goal is claimed per run.
 
 ---
 
@@ -765,15 +765,15 @@ Remove Claude-only assumptions from the rest of the automation.
 
 ### Required changes
 
-- [ ] Route all host-side inference through `provider-run.sh` or a closely related provider helper.
-- [ ] Keep scheduled tasks functional.
-- [ ] Keep daily summaries functional.
-- [ ] Keep goal loop separate from scheduled tasks.
-- [ ] Do not break existing DB task history behavior.
+- [x] Route all host-side inference through `provider-run.sh` or a closely related provider helper.
+- [x] Keep scheduled tasks functional.
+- [x] Keep daily summaries functional.
+- [x] Keep goal loop separate from scheduled tasks.
+- [x] Do not break existing DB task history behavior.
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
@@ -796,9 +796,9 @@ Add `supabase/migrations/006_goalloop.sql`.
 
 ### SQL requirements
 
-- [ ] use idempotent SQL
-- [ ] table: `cc_goals`
-- [ ] fields:
+- [x] use idempotent SQL
+- [x] table: `cc_goals`
+- [x] fields:
   - `slug`
   - `title`
   - `status`
@@ -817,30 +817,30 @@ Add `supabase/migrations/006_goalloop.sql`.
   - `parent`
   - `notify_chat_id`
   - `updated_at`
-- [ ] read access pattern consistent with the current dashboard/PostgREST stack
+- [x] read access pattern consistent with the current dashboard/PostgREST stack
 
 ### Sync script
 
 `goalloop-sync.sh` must:
 
-- [ ] infer status from directory
-- [ ] use `goalmeta.py` for criteria/scoreboard
-- [ ] JSON-encode safely
-- [ ] upsert to `cc_goals` via PostgREST on localhost:3001
-- [ ] reconcile parent goals after sync
+- [x] infer status from directory
+- [x] use `goalmeta.py` for criteria/scoreboard
+- [x] JSON-encode safely
+- [x] upsert to `cc_goals` via PostgREST on localhost:3001
+- [x] reconcile parent goals after sync
 
 ### Bootstrap/update requirement
 
-- [ ] bootstrap must call `scripts/run-migrations.sh` after services start
-- [ ] fresh installs must receive `006_goalloop.sql` automatically
+- [x] bootstrap must call `scripts/run-migrations.sh` after services start
+- [x] fresh installs must receive `006_goalloop.sql` automatically
 
 ### Dashboard tasks
 
-- [ ] add `goals` tab to current dashboard
-- [ ] add `GoalsTab.js`
-- [ ] add `/api/goals`
-- [ ] keep goals UI read-only
-- [ ] display at minimum:
+- [x] add `goals` tab to current dashboard
+- [x] add `GoalsTab.js`
+- [x] add `/api/goals`
+- [x] keep goals UI read-only
+- [x] display at minimum:
   - title
   - status
   - priority
@@ -852,11 +852,11 @@ Add `supabase/migrations/006_goalloop.sql`.
   - finish criteria progress
   - scoreboard summary
   - parent/child info if present
-- [ ] optionally show active provider in overview or header
+- [x] optionally show active provider in overview or header
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
@@ -874,25 +874,25 @@ Make installation and operations clear for either provider.
 
 ### Tasks
 
-- [ ] Update README install section to show provider selection.
-- [ ] Document provider auth flows separately:
+- [x] Update README install section to show provider selection.
+- [x] Document provider auth flows separately:
   - Claude Code auth
   - Codex device-auth / login path
-- [ ] Replace Telegram-plugin setup instructions with provider-neutral Bot API setup.
-- [ ] Update attach/troubleshooting commands:
+- [x] Replace Telegram-plugin setup instructions with provider-neutral Bot API setup.
+- [x] Update attach/troubleshooting commands:
   - `tmux attach -t agent`
   - `tmux attach -t goalloop`
-- [ ] Explain that the runtime now uses resumable headless turns rather than a permanently running provider UI.
-- [ ] Keep a short migration note for old installs that previously used the Claude Telegram plugin.
+- [x] Explain that the runtime now uses resumable headless turns rather than a permanently running provider UI.
+- [x] Keep a short migration note for old installs that previously used the Claude Telegram plugin.
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
-- [ ] README no longer implies Claude-only runtime.
-- [ ] README no longer treats the Claude Telegram plugin as required.
+- [x] README no longer implies Claude-only runtime.
+- [x] README no longer treats the Claude Telegram plugin as required.
 
 ---
 
@@ -904,8 +904,8 @@ Prove the multi-provider GoalLoop system works end to end.
 
 ### Automated tests
 
-- [ ] Add focused tests for `goalmeta.py`
-- [ ] Add at least one smoke test for `provider-run.sh`
+- [x] Add focused tests for `goalmeta.py`
+- [x] Add at least one smoke test for `provider-run.sh`
   - first-run vs resume behavior
   - channel isolation
 - [ ] Add at least one smoke test for Telegram helper scripts if practical
@@ -958,7 +958,7 @@ Prove the multi-provider GoalLoop system works end to end.
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
@@ -981,13 +981,13 @@ The migration is done when all of the following are true:
 - [ ] `CLAUDE.md` is only a shim that imports `AGENTS.md`
 - [ ] Telegram no longer depends on the Claude plugin
 - [ ] Telegram round-trip works with either provider
-- [ ] `provider-run.sh` is the single host-side runtime adapter
-- [ ] GoalLoop heartbeat uses `provider-run.sh`
-- [ ] scheduled tasks and summaries use provider-neutral runtime invocation
-- [ ] `goalmeta.py` is the single goal metadata parser/mutator
+- [x] `provider-run.sh` is the single host-side runtime adapter
+- [x] GoalLoop heartbeat uses `provider-run.sh`
+- [x] scheduled tasks and summaries use provider-neutral runtime invocation
+- [x] `goalmeta.py` is the single goal metadata parser/mutator
 - [ ] `cc_goals` is projected from files and visible in the dashboard
 - [ ] read-only Goals tab works
-- [ ] no host-side automation path is still hardwired to Claude only
+- [x] no host-side automation path is still hardwired to Claude only
 
 ---
 

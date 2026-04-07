@@ -1,0 +1,54 @@
+import { NextResponse } from 'next/server'
+import { supabaseGet, verifySession } from '../../lib/auth'
+
+const STATUS_ORDER = { active: 0, paused: 1, completed: 2 }
+const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 }
+
+function sortGoals(goals) {
+  return [...goals].sort((left, right) => {
+    const statusDelta = (STATUS_ORDER[left.status] ?? 99) - (STATUS_ORDER[right.status] ?? 99)
+    if (statusDelta !== 0) return statusDelta
+
+    const priorityDelta =
+      (PRIORITY_ORDER[left.priority] ?? PRIORITY_ORDER.medium) -
+      (PRIORITY_ORDER[right.priority] ?? PRIORITY_ORDER.medium)
+    if (priorityDelta !== 0) return priorityDelta
+
+    return (left.title || left.slug || '').localeCompare(right.title || right.slug || '')
+  })
+}
+
+function buildStats(goals) {
+  const stats = {
+    total: goals.length,
+    active: 0,
+    paused: 0,
+    completed: 0,
+    running: 0,
+    manualApproval: 0,
+  }
+
+  for (const goal of goals) {
+    if (goal.status && Object.hasOwn(stats, goal.status)) {
+      stats[goal.status] += 1
+    }
+    if (goal.run_state === 'running') stats.running += 1
+    if (goal.approval_policy === 'manual') stats.manualApproval += 1
+  }
+
+  return stats
+}
+
+export async function GET(request) {
+  if (!verifySession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const goals = await supabaseGet('cc_goals?select=*')
+  const orderedGoals = sortGoals(goals || [])
+
+  return NextResponse.json({
+    goals: orderedGoals,
+    stats: buildStats(orderedGoals),
+  })
+}

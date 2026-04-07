@@ -3,7 +3,7 @@
 # Usage: tasks.sh <command> [args]
 #
 # Tasks are stored in Supabase cc_scheduled_tasks and executed via cron.
-# Each task runs a prompt via `claude -p` and optionally sends results to Telegram.
+# Each task runs via `provider-run.sh scheduled` and optionally sends results to Telegram.
 
 set -euo pipefail
 

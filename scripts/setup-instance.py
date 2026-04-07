@@ -17,8 +17,11 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get("AGENTOS_DIR", "/opt/agentos"))
 ENV_PATH = ROOT / ".env"
+CONFIG_DIR = ROOT / "config"
+TEMPLATE_SOURCE_DIR = CONFIG_DIR / "goal-templates"
 GOALS_DIR = ROOT / "goals"
 ACTIVE_GOALS_DIR = GOALS_DIR / "active"
+TEMPLATES_DIR = GOALS_DIR / "templates"
 RUNBOOK_PATH = GOALS_DIR / "_runbook.md"
 CONTEXT_PATH = GOALS_DIR / "_context.md"
 
@@ -87,7 +90,7 @@ def ensure_goal_dirs() -> None:
         GOALS_DIR / "active",
         GOALS_DIR / "paused",
         GOALS_DIR / "completed",
-        GOALS_DIR / "templates",
+        TEMPLATES_DIR,
         GOALS_DIR / "proof",
         GOALS_DIR / "locks",
     ]:
@@ -97,6 +100,12 @@ def ensure_goal_dirs() -> None:
         RUNBOOK_PATH.write_text("", encoding="utf-8")
     if not CONTEXT_PATH.exists():
         CONTEXT_PATH.write_text("", encoding="utf-8")
+
+    if TEMPLATE_SOURCE_DIR.exists():
+        for template in TEMPLATE_SOURCE_DIR.glob("*.md"):
+            destination = TEMPLATES_DIR / template.name
+            if not destination.exists():
+                destination.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def read_json_stdin() -> dict:
@@ -211,14 +220,43 @@ def create_goal() -> None:
     front_matter = (
         "---\n"
         f"title: {json.dumps(title)}\n"
-        'brief_status: "draft"\n'
         "priority: medium\n"
+        'brief_status: "draft"\n'
         "run_state: idle\n"
-        f"created_at: {timestamp}\n"
-        f"updated_at: {timestamp}\n"
+        "run_id: null\n"
+        "run_started_at: null\n"
+        "heartbeat_minutes: 60\n"
+        f"created: {json.dumps(timestamp)}\n"
+        "last_run: null\n"
+        "next_eligible_at: null\n"
+        "measurement_due_at: null\n"
+        "deadline_at: null\n"
+        "approval_policy: auto\n"
+        "approved_for_next_run: null\n"
+        "template: null\n"
+        "parent: null\n"
+        "notify_chat_id: null\n"
         "---\n\n"
     )
-    body = f"# Goal\n\n{summary}\n"
+    body = (
+        "## Objective\n\n"
+        f"{summary}\n\n"
+        "## Finish Criteria\n\n"
+        "- [ ] The final deliverable described in the objective exists in its target destination.\n"
+        "- [ ] The result is verified with proof captured under `proof/<goal-slug>/`.\n"
+        "- [ ] The scoreboard and run log reflect the current state of the work.\n\n"
+        "## Context\n\n"
+        "- Draft goal created during onboarding.\n"
+        "- Refine the scope, constraints, and success measures before approval if needed.\n\n"
+        "## Constraints\n\n"
+        "- Use `_context.md` as the standing business context.\n"
+        "- Do not mark any criterion complete until the output is verified.\n\n"
+        "## Scoreboard\n\n"
+        "| Metric | Value | Updated |\n"
+        "|--------|-------|---------|\n"
+        "| Progress | Draft | - |\n\n"
+        "## Run Log\n"
+    )
     goal_path.write_text(front_matter + body, encoding="utf-8")
 
 

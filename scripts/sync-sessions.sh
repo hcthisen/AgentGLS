@@ -1,11 +1,10 @@
 #!/bin/bash
-# sync-sessions.sh — Sync Claude Code JSONL session files to Supabase
+# sync-sessions.sh - Sync Claude and Codex JSONL session files to Supabase.
 # Usage: sync-sessions.sh [--all]
 
 set -euo pipefail
 
 CRED_FILE="$HOME/.claude/credentials/supabase.env"
-SESSION_DIR="$HOME/.claude/projects/-root"
 SYNC_ALL="${1:-}"
 
 if [[ -f "$CRED_FILE" ]]; then
@@ -18,97 +17,203 @@ fi
 SUPABASE_URL="${SUPABASE_URL:-http://localhost:3001}"
 SUPABASE_KEY="${SUPABASE_SERVICE_ROLE_KEY}"
 
-if [[ ! -d "$SESSION_DIR" ]]; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') No session directory found at $SESSION_DIR"
-  exit 0
-fi
-
-# Find JSONL files to sync
+SYNC_MODE="latest"
 if [[ "$SYNC_ALL" == "--all" ]]; then
-  FILES=$(find "$SESSION_DIR" -name "*.jsonl" -type f 2>/dev/null)
-else
-  # Only the most recently modified file
-  FILES=$(find "$SESSION_DIR" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  SYNC_MODE="all"
 fi
 
-if [[ -z "$FILES" ]]; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') No JSONL files found"
-  exit 0
-fi
+export SUPABASE_URL SUPABASE_KEY SYNC_MODE
 
-process_file() {
-  local file="$1"
-  local filename=$(basename "$file" .jsonl)
+python3 <<'PYEOF'
+import json
+import os
+import re
+import subprocess
+import sys
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
-  # Extract content using Python
-  local content
-  content=$(python3 -c "
-import json, sys, re
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+SYNC_MODE = os.environ.get("SYNC_MODE", "latest")
 
-messages = []
-try:
-    with open('$file', 'r') as f:
-        for line in f:
-            line = line.strip()
+SOURCES = [
+    ("claude", Path.home() / ".claude" / "projects" / "-root", "*.jsonl"),
+    ("codex", Path.home() / ".codex" / "sessions", "**/*.jsonl"),
+]
+
+
+def log(message: str) -> None:
+    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {message}")
+
+
+def discover_files():
+    discovered = []
+    for provider, root, pattern in SOURCES:
+        if not root.exists():
+            continue
+        for path in root.glob(pattern):
+            if path.is_file():
+                discovered.append((provider, path))
+    return discovered
+
+
+def truncate_message(text: str) -> str:
+    cleaned = re.sub(r"<system-reminder>.*?</system-reminder>", "", text, flags=re.DOTALL).strip()
+    if len(cleaned) > 500:
+        return cleaned[:500] + "..."
+    return cleaned
+
+
+def extract_claude_message(entry: dict) -> tuple[str, str] | None:
+    role = entry.get("role", "")
+    if role not in {"human", "assistant"}:
+        return None
+
+    content_field = entry.get("content", "")
+    if isinstance(content_field, str):
+        text = content_field
+    else:
+        parts = []
+        for block in content_field or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        text = " ".join(parts)
+
+    text = truncate_message(text)
+    if not text:
+        return None
+    return role, text
+
+
+def extract_codex_message(entry: dict) -> tuple[str, str] | None:
+    if entry.get("type") != "response_item":
+        return None
+
+    payload = entry.get("payload")
+    if not isinstance(payload, dict) or payload.get("type") != "message":
+        return None
+
+    role = payload.get("role", "")
+    if role not in {"user", "assistant"}:
+        return None
+
+    text_parts = []
+    for block in payload.get("content") or []:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type in {"input_text", "output_text", "text"}:
+            text_parts.append(str(block.get("text", "")))
+
+    text = truncate_message(" ".join(text_parts))
+    if not text:
+        return None
+
+    return ("human" if role == "user" else "assistant"), text
+
+
+def extract_content(provider: str, path: Path) -> str:
+    messages = []
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
             if not line:
                 continue
             try:
                 entry = json.loads(line)
-                role = entry.get('role', '')
-                if role not in ('human', 'assistant'):
-                    continue
-                # Get text content
-                msg_content = ''
-                content_field = entry.get('content', '')
-                if isinstance(content_field, str):
-                    msg_content = content_field
-                elif isinstance(content_field, list):
-                    parts = []
-                    for block in content_field:
-                        if isinstance(block, dict) and block.get('type') == 'text':
-                            parts.append(block.get('text', ''))
-                    msg_content = ' '.join(parts)
-                # Filter system reminders
-                msg_content = re.sub(r'<system-reminder>.*?</system-reminder>', '', msg_content, flags=re.DOTALL)
-                # Truncate
-                if len(msg_content) > 500:
-                    msg_content = msg_content[:500] + '...'
-                if msg_content.strip():
-                    messages.append(f'[{role}] {msg_content.strip()}')
             except json.JSONDecodeError:
                 continue
-except Exception as e:
-    print(f'Error: {e}', file=sys.stderr)
-    sys.exit(1)
 
-print('\n'.join(messages))
-" 2>/dev/null)
+            if provider == "claude":
+                parsed = extract_claude_message(entry)
+            else:
+                parsed = extract_codex_message(entry)
 
-  if [[ -z "$content" ]]; then
-    return
-  fi
+            if parsed is None:
+                continue
 
-  # Escape for JSON
-  local json_content
-  json_content=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$content")
+            role, text = parsed
+            messages.append(f"[{role}] {text}")
 
-  # Upsert via PostgREST
-  local response
-  response=$(curl -sf -X POST "${SUPABASE_URL}/cc_sessions" \
-    -H "apikey: ${SUPABASE_KEY}" \
-    -H "Authorization: Bearer ${SUPABASE_KEY}" \
-    -H "Content-Type: application/json" \
-    -H "Prefer: resolution=merge-duplicates,return=minimal" \
-    -d "{\"id\":\"${filename}\",\"content\":${json_content},\"project\":\"root\"}" 2>&1) || true
+    return "\n".join(messages)
 
-  echo "$(date '+%Y-%m-%d %H:%M:%S') Synced: $filename ($(echo "$content" | wc -c) bytes)"
-}
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') Starting session sync..."
-count=0
-while IFS= read -r file; do
-  [[ -z "$file" ]] && continue
-  process_file "$file"
-  count=$((count + 1))
-done <<< "$FILES"
-echo "$(date '+%Y-%m-%d %H:%M:%S') Sync complete: $count file(s) processed"
+def stable_session_id(provider: str, path: Path) -> str:
+    stem = path.stem
+    try:
+        return str(uuid.UUID(stem))
+    except ValueError:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{provider}:{path.as_posix()}"))
+
+
+def session_timestamp(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def sync_file(provider: str, path: Path) -> bool:
+    content = extract_content(provider, path)
+    if not content:
+        return False
+
+    payload = {
+        "id": stable_session_id(provider, path),
+        "project": "root",
+        "content": content,
+        "session_date": session_timestamp(path),
+    }
+
+    result = subprocess.run(
+        [
+            "curl",
+            "-sf",
+            "-X",
+            "POST",
+            f"{SUPABASE_URL}/cc_sessions",
+            "-H",
+            f"apikey: {SUPABASE_KEY}",
+            "-H",
+            f"Authorization: Bearer {SUPABASE_KEY}",
+            "-H",
+            "Content-Type: application/json",
+            "-H",
+            "Prefer: resolution=merge-duplicates,return=minimal",
+            "-d",
+            json.dumps(payload),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"Failed to sync {path}")
+
+    log(f"Synced {provider}: {path.name} ({len(content)} bytes)")
+    return True
+
+
+all_files = discover_files()
+if not all_files:
+    log("No Claude or Codex session directories found")
+    raise SystemExit(0)
+
+if SYNC_MODE == "all":
+    selected = sorted(all_files, key=lambda item: item[1].stat().st_mtime, reverse=True)
+else:
+    selected = [max(all_files, key=lambda item: item[1].stat().st_mtime)]
+
+log("Starting session sync...")
+count = 0
+for provider, path in selected:
+    try:
+        if sync_file(provider, path):
+            count += 1
+    except Exception as exc:
+        log(f"Failed to sync {provider} session {path}: {exc}")
+
+log(f"Sync complete: {count} file(s) processed")
+PYEOF

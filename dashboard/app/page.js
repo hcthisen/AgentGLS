@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import GoalsTab from './components/GoalsTab'
 import SecretsTab from './components/SecretsTab'
 import TerminalTab from './components/TerminalTab'
 
@@ -580,6 +581,7 @@ function OverviewTab({ setupState }) {
 
 const TABS = [
   { id: 'overview', label: 'overview' },
+  { id: 'goals', label: 'goals' },
   { id: 'secrets', label: 'secrets' },
   { id: 'terminal', label: 'terminal' },
 ]
@@ -694,6 +696,7 @@ export default function Home() {
 
       <div className="tab-content">
         {activeTab === 'overview' && <OverviewTab setupState={setupState} />}
+        {activeTab === 'goals' && <GoalsTab />}
         {activeTab === 'secrets' && <SecretsTab />}
         {activeTab === 'terminal' && <TerminalTab />}
       </div>

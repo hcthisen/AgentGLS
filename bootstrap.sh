@@ -81,6 +81,7 @@ install_deps() {
     fail2ban \
     python3 \
     python3-pip \
+    python3-yaml \
     jq \
     curl \
     git \
@@ -249,6 +250,42 @@ prepare_runtime_layout() {
   success "Runtime layout ready"
 }
 
+install_goalloop_assets() {
+  step "Installing GoalLoop runtime assets..."
+
+  local runtime_agents_source="$INSTALL_DIR/config/runtime-agents.md"
+  local claude_shim_source="$INSTALL_DIR/config/claude-shim.md"
+  local template_source_dir="$INSTALL_DIR/config/goal-templates"
+  local template_dest_dir="$INSTALL_DIR/goals/templates"
+
+  if [[ ! -f "$runtime_agents_source" ]]; then
+    error "Missing runtime instructions: $runtime_agents_source"
+    exit 1
+  fi
+
+  if [[ ! -f "$claude_shim_source" ]]; then
+    error "Missing Claude shim template: $claude_shim_source"
+    exit 1
+  fi
+
+  install -m 0644 "$runtime_agents_source" "$INSTALL_DIR/AGENTS.md"
+  install -m 0644 "$claude_shim_source" "$INSTALL_DIR/CLAUDE.md"
+
+  if [[ -d "$template_source_dir" ]]; then
+    for template in "$template_source_dir"/*.md; do
+      [[ -f "$template" ]] || continue
+      local dest="$template_dest_dir/$(basename "$template")"
+      if [[ ! -f "$dest" ]]; then
+        install -m 0644 "$template" "$dest"
+      fi
+    done
+  fi
+
+  chown "$AGENTOS_USER":"$AGENTOS_USER" "$INSTALL_DIR/AGENTS.md" "$INSTALL_DIR/CLAUDE.md"
+  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "$template_dest_dir"
+  success "GoalLoop runtime instructions and templates installed"
+}
+
 setup_terminal_ssh() {
   step "Setting up SSH keypair for dashboard terminal access..."
 
@@ -322,6 +359,12 @@ start_supabase() {
   success "Supabase services started"
 }
 
+run_database_migrations() {
+  step "Applying database migrations..."
+  bash "$INSTALL_DIR/scripts/run-migrations.sh"
+  success "Database migrations applied"
+}
+
 build_dashboard() {
   step "Building dashboard and terminal containers..."
   cd "$INSTALL_DIR"
@@ -379,10 +422,24 @@ install_crontab() {
 */5 * * * * /opt/agentos/scripts/sync-secrets.sh >> /opt/agentos/logs/secrets-sync.log 2>&1
 */10 * * * * /opt/agentos/scripts/security-sync.sh >> /opt/agentos/logs/security.log 2>&1
 */10 * * * * /opt/agentos/scripts/server-health.sh >> /opt/agentos/logs/health.log 2>&1
-*/30 * * * * /opt/agentos/scripts/sync-sessions.sh >> /opt/agentos/logs/sync.log 2>&1"
+*/30 * * * * /opt/agentos/scripts/sync-sessions.sh >> /opt/agentos/logs/sync.log 2>&1
+0 * * * * /opt/agentos/scripts/goalloop-heartbeat.sh >> /opt/agentos/logs/goalloop-heartbeat.log 2>&1
+*/30 * * * * /opt/agentos/scripts/goalloop-sync.sh >> /opt/agentos/logs/goalloop-sync.log 2>&1
+0 */2 * * * /opt/agentos/scripts/daily-summary.sh >> /opt/agentos/logs/daily-summary.log 2>&1
+0 3 * * * /opt/agentos/scripts/memory-consolidate.sh >> /opt/agentos/logs/memory-consolidate.log 2>&1"
 
   echo "$cron_content" | crontab -u "$AGENTOS_USER" -
   success "Base cron jobs installed"
+}
+
+restore_scheduled_task_cron() {
+  step "Re-syncing scheduled task cron entries..."
+
+  if sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/tasks.sh" sync >/dev/null 2>&1; then
+    success "Scheduled task cron entries synced from database"
+  else
+    warn "Scheduled task cron re-sync failed; rerun /opt/agentos/scripts/tasks.sh sync after bootstrap if tasks already exist"
+  fi
 }
 
 run_initial_sync() {
@@ -390,6 +447,7 @@ run_initial_sync() {
   sudo -H -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/watchdog.sh" 2>/dev/null || true
   sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/security-sync.sh" 2>/dev/null || true
   sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/server-health.sh" 2>/dev/null || true
+  sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/goalloop-sync.sh" 2>/dev/null || true
   success "Initial sync complete"
 }
 
@@ -441,13 +499,16 @@ main() {
   prepare_config
   write_env
   prepare_runtime_layout
+  install_goalloop_assets
   setup_terminal_ssh
   write_credentials
   start_supabase
+  run_database_migrations
   build_dashboard
   configure_caddy_if_requested
   install_provider_if_selected
   install_crontab
+  restore_scheduled_task_cron
   run_initial_sync
   print_banner
 }

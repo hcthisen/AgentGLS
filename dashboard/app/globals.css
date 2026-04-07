@@ -446,6 +446,110 @@ tr:hover td {
   margin-bottom: 0.5rem;
 }
 
+.goal-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.goal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.9rem;
+}
+
+.goal-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.goal-title {
+  color: var(--green);
+  font-size: 14px;
+}
+
+.goal-slug {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.goal-state {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.45rem;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.goal-state.ok {
+  color: var(--green);
+  border-color: rgba(0, 255, 65, 0.35);
+}
+
+.goal-state.warn {
+  color: var(--yellow);
+  border-color: rgba(255, 204, 0, 0.35);
+}
+
+.goal-state.error {
+  color: var(--red);
+  border-color: rgba(255, 51, 51, 0.35);
+}
+
+.goal-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.goal-meta-item,
+.goal-summary-row,
+.goal-relations {
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.goal-meta-item {
+  padding: 0.45rem 0.55rem;
+}
+
+.goal-meta-item span,
+.goal-summary-row span,
+.goal-relations span {
+  display: block;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.goal-meta-item strong,
+.goal-summary-row strong,
+.goal-relations strong {
+  display: block;
+  font-weight: normal;
+  margin-top: 0.2rem;
+}
+
+.goal-objective {
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+.goal-summary-row {
+  padding: 0.45rem 0.55rem;
+  margin-bottom: 0.45rem;
+}
+
+.goal-relations {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem;
+  margin-top: 0.75rem;
+}
+
 /* Secrets Form */
 .secrets-form {
   display: flex;
