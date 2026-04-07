@@ -553,14 +553,14 @@ Keep the operational tmux model, but make it provider-neutral and shell-based.
 
 ### Tasks
 
-- [ ] Replace the old Claude-specific human tmux session with a provider-neutral shell session named:
+- [x] Replace the old Claude-specific human tmux session with a provider-neutral shell session named:
   - `agent`
-- [ ] Keep autonomous shell session:
+- [x] Keep autonomous shell session:
   - `goalloop`
-- [ ] Update `scripts/watchdog.sh` so it ensures these tmux shell sessions exist.
-- [ ] Stop trying to keep a provider REPL running inside tmux.
-- [ ] The provider CLI should run **per turn** through `provider-run.sh`.
-- [ ] Update `scripts/status.sh` to show:
+- [x] Update `scripts/watchdog.sh` so it ensures these tmux shell sessions exist.
+- [x] Stop trying to keep a provider REPL running inside tmux.
+- [x] The provider CLI should run **per turn** through `provider-run.sh`.
+- [x] Update `scripts/status.sh` to show:
   - active provider
   - provider binary presence
   - tmux `agent` session exists
@@ -570,17 +570,17 @@ Keep the operational tmux model, but make it provider-neutral and shell-based.
 
 ### Optional but useful
 
-- [ ] keep backward-compatible detection of old `claude` tmux session during transition and warn the operator that `agent` is now canonical
+- [x] keep backward-compatible detection of old `claude` tmux session during transition and warn the operator that `agent` is now canonical
 
 ### Final task
 
-- [ ] Update `PLAN.md` to reflect the completed phase.
+- [x] Update `PLAN.md` to reflect the completed phase.
 
 ### Acceptance
 
-- [ ] `agent` tmux session exists and is attachable.
-- [ ] `goalloop` tmux session exists and is attachable.
-- [ ] watchdog is no longer Claude-plugin-specific.
+- [x] `agent` tmux session exists and is attachable.
+- [x] `goalloop` tmux session exists and is attachable.
+- [x] watchdog is no longer Claude-plugin-specific.
 
 ---
 

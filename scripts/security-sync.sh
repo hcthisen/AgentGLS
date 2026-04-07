@@ -118,7 +118,7 @@ try:
                 'user_name': 'root',
                 'ip': '',
                 'login_at': parts[1] if len(parts) > 1 else '',
-                'session_type': f'tmux (Claude Code)' if 'claude' in parts[0] else f'tmux ({parts[0]})',
+                'session_type': 'tmux (legacy claude)' if parts[0] == 'claude' else f'tmux ({parts[0]})',
                 'duration': 'active'
             })
 except:

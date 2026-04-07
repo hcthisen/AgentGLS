@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/provider-lib.sh"
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -16,16 +20,46 @@ check() {
   if eval "$2" >/dev/null 2>&1; then ok "$1"; else fail "$1"; fi
 }
 
-INSTALL_DIR="/opt/agentos"
-ENV_FILE="$INSTALL_DIR/.env"
-AGENTOS_USER="agentos"
+run_as_agentos() {
+  local command="$1"
 
-if [[ -f "$ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
-fi
+  if [[ "$(id -un)" == "$AGENTOS_USER" ]]; then
+    bash -lc "$command"
+  else
+    sudo -H -u "$AGENTOS_USER" bash -lc "$command"
+  fi
+}
+
+tmux_session_exists() {
+  local session="$1"
+  local quoted
+
+  quoted="$(printf '%q' "$session")"
+  run_as_agentos "tmux has-session -t ${quoted}"
+}
+
+telegram_bridge_running() {
+  local quoted
+
+  quoted="$(printf '%q' "$SCRIPT_DIR/provider-lib.sh")"
+  run_as_agentos "source ${quoted}; provider_telegram_bridge_running"
+}
+
+count_goal_files() {
+  local dir="$1"
+
+  if [[ ! -d "$dir" ]]; then
+    echo "0"
+    return 0
+  fi
+
+  find "$dir" -maxdepth 1 -type f -name '*.md' ! -name '_*' | wc -l | tr -d '[:space:]'
+}
+
+INSTALL_DIR="$(provider_install_dir)"
+AGENTOS_USER="${AGENTOS_USER:-agentos}"
+
+load_agentgls_env
 
 echo ""
 echo "AgentGLS System Status"
@@ -47,19 +81,45 @@ echo "-------"
 if [[ -n "${AGENTGLS_PROVIDER:-}" ]]; then
   ok "Active provider: ${AGENTGLS_PROVIDER}"
 
-  if sudo -u "$AGENTOS_USER" bash -lc "'$INSTALL_DIR/scripts/install-provider.sh' status '$AGENTGLS_PROVIDER'" >/tmp/agentgls-provider-status.txt 2>&1; then
-    ok "Provider binary present"
+  if run_as_agentos "'$INSTALL_DIR/scripts/install-provider.sh' status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
+    ok "Provider binary present: ${AGENTGLS_PROVIDER}"
   else
-    fail "Provider binary missing"
+    fail "Provider binary missing: ${AGENTGLS_PROVIDER}"
   fi
 
-  if sudo -u "$AGENTOS_USER" bash -lc "'$INSTALL_DIR/scripts/install-provider.sh' auth-status '$AGENTGLS_PROVIDER'" >/tmp/agentgls-provider-auth.txt 2>&1; then
+  if run_as_agentos "'$INSTALL_DIR/scripts/install-provider.sh' auth-status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
     ok "Provider authenticated"
   else
     warn "Provider not authenticated yet"
   fi
 else
   warn "No active provider selected yet"
+fi
+
+if tmux_session_exists "agent" >/dev/null 2>&1; then
+  ok "tmux session exists: agent"
+else
+  fail "tmux session missing: agent"
+fi
+
+if tmux_session_exists "goalloop" >/dev/null 2>&1; then
+  ok "tmux session exists: goalloop"
+else
+  fail "tmux session missing: goalloop"
+fi
+
+if tmux_session_exists "claude" >/dev/null 2>&1; then
+  warn "Legacy tmux session detected: claude (agent is canonical)"
+fi
+
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  if telegram_bridge_running >/dev/null 2>&1; then
+    ok "Telegram bridge running"
+  else
+    fail "Telegram bridge not running"
+  fi
+else
+  warn "Telegram bridge idle: TELEGRAM_BOT_TOKEN not configured"
 fi
 
 for dir in human goalloop scheduled summary; do
@@ -69,6 +129,18 @@ for dir in human goalloop scheduled summary; do
     fail "Runtime dir missing: runtime/$dir"
   fi
 done
+
+echo ""
+echo "Goals"
+echo "-----"
+
+if [[ -d "$INSTALL_DIR/goals" ]]; then
+  ok "Active goals: $(count_goal_files "$INSTALL_DIR/goals/active")"
+  ok "Paused goals: $(count_goal_files "$INSTALL_DIR/goals/paused")"
+  ok "Completed goals: $(count_goal_files "$INSTALL_DIR/goals/completed")"
+else
+  fail "Goals directory missing: $INSTALL_DIR/goals"
+fi
 
 echo ""
 echo "Access"

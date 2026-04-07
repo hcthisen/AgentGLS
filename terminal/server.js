@@ -11,9 +11,15 @@ const SSH_USER = process.env.SSH_USER || 'agentos'
 const SSH_KEY_PATH = '/ssh-key/id_ed25519'
 const HOST_MOUNT = process.env.AGENTOS_HOST_MOUNT || '/opt/agentos-host'
 const ENV_PATH = path.join(HOST_MOUNT, '.env')
+const DEFAULT_TMUX_SESSION = process.env.AGENTGLS_TERMINAL_SESSION || 'agent'
+const DEFAULT_TMUX_WORKDIR = process.env.AGENTGLS_TERMINAL_WORKDIR || '/opt/agentos/runtime/human'
 const IDLE_TIMEOUT = 60 * 60 * 1000 // 60 minutes
 const PING_INTERVAL = 45 * 1000 // 45 seconds
 const MAX_MISSED_PONGS = 3 // tolerate 3 missed pongs (background tabs throttle timers)
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`
+}
 
 function decodeEnvValue(value) {
   const trimmed = value.trim()
@@ -144,6 +150,11 @@ wss.on('connection', (ws, req) => {
       stream.stderr.on('data', (data) => {
         if (ws.readyState === 1) ws.send(data)
       })
+
+      // Land the operator in the canonical human-facing tmux shell.
+      stream.write(
+        `tmux new-session -A -s ${shellQuote(DEFAULT_TMUX_SESSION)} -c ${shellQuote(DEFAULT_TMUX_WORKDIR)}\n`
+      )
     })
   })
 

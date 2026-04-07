@@ -56,6 +56,30 @@ ensure_provider_channel_dir() {
   printf '%s\n' "$dir"
 }
 
+provider_shell_session_dir() {
+  local session="$1"
+
+  case "$session" in
+    agent)
+      provider_channel_dir "human"
+      ;;
+    goalloop)
+      provider_channel_dir "goalloop"
+      ;;
+    *)
+      echo "Unknown tmux shell session: ${session:-<empty>}" >&2
+      return 1
+      ;;
+  esac
+}
+
+ensure_provider_shell_session_dir() {
+  local dir
+  dir="$(provider_shell_session_dir "$1")"
+  mkdir -p "$dir"
+  printf '%s\n' "$dir"
+}
+
 provider_state_dir() {
   printf '%s/.agentgls\n' "$(provider_channel_dir "$1")"
 }
@@ -107,6 +131,18 @@ provider_stderr_log_file() {
   local provider="${2:-$(resolve_active_provider)}"
 
   printf '%s/%s-%s.stderr.log\n' "$(ensure_provider_log_dir)" "$provider" "$channel"
+}
+
+provider_telegram_bridge_script() {
+  printf '%s/scripts/telegram-bridge.py\n' "$(provider_install_dir)"
+}
+
+provider_telegram_bridge_running() {
+  local bridge_script
+  bridge_script="$(provider_telegram_bridge_script)"
+
+  pgrep -f "python3 ${bridge_script} run" >/dev/null 2>&1 ||
+    pgrep -f "${bridge_script} run" >/dev/null 2>&1
 }
 
 provider_binary() {

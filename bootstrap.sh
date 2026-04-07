@@ -375,6 +375,7 @@ install_crontab() {
   step "Installing base cron jobs..."
 
   local cron_content="# AgentGLS base maintenance
+*/5 * * * * /opt/agentos/scripts/watchdog.sh >> /opt/agentos/logs/watchdog.log 2>&1
 */5 * * * * /opt/agentos/scripts/sync-secrets.sh >> /opt/agentos/logs/secrets-sync.log 2>&1
 */10 * * * * /opt/agentos/scripts/security-sync.sh >> /opt/agentos/logs/security.log 2>&1
 */10 * * * * /opt/agentos/scripts/server-health.sh >> /opt/agentos/logs/health.log 2>&1
@@ -386,6 +387,7 @@ install_crontab() {
 
 run_initial_sync() {
   step "Running initial health sync..."
+  sudo -H -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/watchdog.sh" 2>/dev/null || true
   sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/security-sync.sh" 2>/dev/null || true
   sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/server-health.sh" 2>/dev/null || true
   success "Initial sync complete"
