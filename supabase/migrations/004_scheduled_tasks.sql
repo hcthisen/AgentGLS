@@ -1,4 +1,4 @@
--- AgentOS-CC: Scheduled Tasks Table
+-- AgentGLS: Scheduled Tasks Table
 -- Allows the agent to create persistent cron jobs stored in Supabase
 
 CREATE TABLE IF NOT EXISTS cc_scheduled_tasks (

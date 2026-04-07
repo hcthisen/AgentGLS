@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(os.environ.get("AGENTOS_DIR", "/opt/agentos"))
+ROOT = Path(os.environ.get("AGENTGLS_DIR", "/opt/agentgls"))
 ENV_PATH = ROOT / ".env"
 STATE_DIR = ROOT / "state" / "telegram"
 ALLOWLIST_PATH = STATE_DIR / "allowlist.json"

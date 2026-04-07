@@ -7,10 +7,10 @@
 
 set -euo pipefail
 
-AGENTOS_USER="agentos"
-INSTALL_DIR="${AGENTOS_DIR:-/opt/agentos}"
+AGENTGLS_USER="agentgls"
+INSTALL_DIR="${AGENTGLS_DIR:-/opt/agentgls}"
 REPO_URL="https://github.com/hcthisen/AgentGLS.git"
-REPO_BRANCH="${AGENTOS_BRANCH:-main}"
+REPO_BRANCH="${AGENTGLS_BRANCH:-main}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
@@ -19,12 +19,12 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error()   { echo -e "${RED}[ERR]${NC}  $*" >&2; }
 step()    { echo -e "\n${GREEN}>>>${NC} $*"; }
 
-OVERRIDE_AGENTOS_DOMAIN="${AGENTOS_DOMAIN:-}"
+OVERRIDE_AGENTGLS_DOMAIN="${AGENTGLS_DOMAIN:-}"
 OVERRIDE_AGENTGLS_PROVIDER="${AGENTGLS_PROVIDER:-}"
 OVERRIDE_ADMIN_NAME="${AGENTGLS_ADMIN_NAME:-}"
 OVERRIDE_ADMIN_EMAIL="${AGENTGLS_ADMIN_EMAIL:-}"
-OVERRIDE_DASHBOARD_PASSWORD="${AGENTOS_DASHBOARD_PASSWORD:-}"
-OVERRIDE_TELEGRAM_TOKEN="${TELEGRAM_BOT_TOKEN:-${AGENTOS_TELEGRAM_TOKEN:-}}"
+OVERRIDE_DASHBOARD_PASSWORD="${AGENTGLS_DASHBOARD_PASSWORD:-}"
+OVERRIDE_TELEGRAM_TOKEN="${TELEGRAM_BOT_TOKEN:-${AGENTGLS_TELEGRAM_TOKEN:-}}"
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -48,16 +48,16 @@ check_os() {
 }
 
 create_user() {
-  if id "$AGENTOS_USER" &>/dev/null; then
-    info "User '$AGENTOS_USER' already exists"
+  if id "$AGENTGLS_USER" &>/dev/null; then
+    info "User '$AGENTGLS_USER' already exists"
     return
   fi
 
-  step "Creating user '$AGENTOS_USER'..."
-  useradd -m -s /bin/bash "$AGENTOS_USER"
-  echo "$AGENTOS_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/agentos
-  chmod 440 /etc/sudoers.d/agentos
-  success "User '$AGENTOS_USER' created with passwordless sudo"
+  step "Creating user '$AGENTGLS_USER'..."
+  useradd -m -s /bin/bash "$AGENTGLS_USER"
+  echo "$AGENTGLS_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/agentgls
+  chmod 440 /etc/sudoers.d/agentgls
+  success "User '$AGENTGLS_USER' created with passwordless sudo"
 }
 
 install_deps() {
@@ -73,7 +73,7 @@ install_deps() {
     info "Docker already installed"
   fi
 
-  usermod -aG docker "$AGENTOS_USER"
+  usermod -aG docker "$AGENTGLS_USER"
 
   apt-get update -qq
   apt-get install -y -qq \
@@ -138,7 +138,7 @@ clone_repo() {
   fi
 
   mkdir -p "$INSTALL_DIR"/{logs,config,scripts,supabase/migrations}
-  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "$INSTALL_DIR"
+  chown -R "$AGENTGLS_USER":"$AGENTGLS_USER" "$INSTALL_DIR"
   chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
   success "Installation directory ready: $INSTALL_DIR"
 }
@@ -184,7 +184,7 @@ prepare_config() {
 
   load_existing_env
 
-  AGENTOS_DOMAIN="${OVERRIDE_AGENTOS_DOMAIN:-${AGENTOS_DOMAIN:-}}"
+  AGENTGLS_DOMAIN="${OVERRIDE_AGENTGLS_DOMAIN:-${AGENTGLS_DOMAIN:-}}"
   AGENTGLS_PROVIDER="${OVERRIDE_AGENTGLS_PROVIDER:-${AGENTGLS_PROVIDER:-}}"
   AGENTGLS_ADMIN_NAME="${OVERRIDE_ADMIN_NAME:-${AGENTGLS_ADMIN_NAME:-}}"
   AGENTGLS_ADMIN_EMAIL="${OVERRIDE_ADMIN_EMAIL:-${AGENTGLS_ADMIN_EMAIL:-}}"
@@ -211,7 +211,7 @@ write_env() {
   admin_name_escaped="${admin_name_escaped//\"/\\\"}"
 
   cat > "$INSTALL_DIR/.env" <<EOF
-AGENTOS_DOMAIN=${AGENTOS_DOMAIN}
+AGENTGLS_DOMAIN=${AGENTGLS_DOMAIN}
 AGENTGLS_PROVIDER=${AGENTGLS_PROVIDER}
 AGENTGLS_ADMIN_NAME="${admin_name_escaped}"
 AGENTGLS_ADMIN_EMAIL=${AGENTGLS_ADMIN_EMAIL}
@@ -226,7 +226,7 @@ DASHBOARD_PASSWORD_HASH=${DASHBOARD_PASSWORD_HASH}
 EOF
 
   chmod 600 "$INSTALL_DIR/.env"
-  chown "$AGENTOS_USER":"$AGENTOS_USER" "$INSTALL_DIR/.env"
+  chown "$AGENTGLS_USER":"$AGENTGLS_USER" "$INSTALL_DIR/.env"
   success ".env written"
 }
 
@@ -246,7 +246,7 @@ prepare_runtime_layout() {
     "$INSTALL_DIR/goals/locks"
 
   touch "$INSTALL_DIR/goals/_context.md" "$INSTALL_DIR/goals/_runbook.md"
-  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "$INSTALL_DIR/runtime" "$INSTALL_DIR/goals"
+  chown -R "$AGENTGLS_USER":"$AGENTGLS_USER" "$INSTALL_DIR/runtime" "$INSTALL_DIR/goals"
   success "Runtime layout ready"
 }
 
@@ -281,8 +281,8 @@ install_goalloop_assets() {
     done
   fi
 
-  chown "$AGENTOS_USER":"$AGENTOS_USER" "$INSTALL_DIR/AGENTS.md" "$INSTALL_DIR/CLAUDE.md"
-  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "$template_dest_dir"
+  chown "$AGENTGLS_USER":"$AGENTGLS_USER" "$INSTALL_DIR/AGENTS.md" "$INSTALL_DIR/CLAUDE.md"
+  chown -R "$AGENTGLS_USER":"$AGENTGLS_USER" "$template_dest_dir"
   success "GoalLoop runtime instructions and templates installed"
 }
 
@@ -291,8 +291,8 @@ setup_terminal_ssh() {
 
   local key_path="$INSTALL_DIR/terminal-ssh-key"
   if [[ ! -f "$key_path" ]]; then
-    ssh-keygen -t ed25519 -f "$key_path" -N "" -C "agentos-terminal" >/dev/null 2>&1
-    chown "$AGENTOS_USER":"$AGENTOS_USER" "$key_path" "${key_path}.pub"
+    ssh-keygen -t ed25519 -f "$key_path" -N "" -C "agentgls-terminal" >/dev/null 2>&1
+    chown "$AGENTGLS_USER":"$AGENTGLS_USER" "$key_path" "${key_path}.pub"
     chmod 600 "$key_path"
     chmod 644 "${key_path}.pub"
     success "SSH keypair generated"
@@ -300,27 +300,27 @@ setup_terminal_ssh() {
     info "SSH keypair already exists"
   fi
 
-  local ssh_dir="/home/$AGENTOS_USER/.ssh"
+  local ssh_dir="/home/$AGENTGLS_USER/.ssh"
   local auth_file="$ssh_dir/authorized_keys"
   local pub_key
   pub_key="$(cat "${key_path}.pub")"
 
   mkdir -p "$ssh_dir"
   touch "$auth_file"
-  if ! grep -qF "agentos-terminal" "$auth_file" 2>/dev/null; then
+  if ! grep -qF "agentgls-terminal" "$auth_file" 2>/dev/null; then
     echo "from=\"172.16.0.0/12\" $pub_key" >> "$auth_file"
   fi
 
   chmod 700 "$ssh_dir"
   chmod 600 "$auth_file"
-  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "$ssh_dir"
+  chown -R "$AGENTGLS_USER":"$AGENTGLS_USER" "$ssh_dir"
   success "Dashboard terminal key installed"
 }
 
 write_credentials() {
   step "Writing Supabase credentials for local scripts..."
 
-  local cred_dir="/home/$AGENTOS_USER/.claude/credentials"
+  local cred_dir="/home/$AGENTGLS_USER/.claude/credentials"
   mkdir -p "$cred_dir"
 
   cat > "$cred_dir/supabase.env" <<EOF
@@ -331,7 +331,7 @@ EOF
 
   chmod 700 "$cred_dir"
   chmod 600 "$cred_dir"/*.env
-  chown -R "$AGENTOS_USER":"$AGENTOS_USER" "/home/$AGENTOS_USER/.claude"
+  chown -R "$AGENTGLS_USER":"$AGENTGLS_USER" "/home/$AGENTGLS_USER/.claude"
   success "Local credentials written"
 }
 
@@ -343,13 +343,13 @@ start_supabase() {
 
   info "Waiting for PostgreSQL..."
   for _ in $(seq 1 30); do
-    if docker exec agentos-db pg_isready -U postgres >/dev/null 2>&1; then
+    if docker exec agentgls-db pg_isready -U postgres >/dev/null 2>&1; then
       break
     fi
     sleep 1
   done
 
-  if ! docker exec agentos-db pg_isready -U postgres >/dev/null 2>&1; then
+  if ! docker exec agentgls-db pg_isready -U postgres >/dev/null 2>&1; then
     error "PostgreSQL failed to start"
     exit 1
   fi
@@ -374,25 +374,25 @@ build_dashboard() {
   if curl -sf http://localhost:3000 >/dev/null 2>&1; then
     success "Dashboard ready on :3000"
   else
-    warn "Dashboard may still be building (check: docker logs agentos-dashboard)"
+    warn "Dashboard may still be building (check: docker logs agentgls-dashboard)"
   fi
 
   if ss -tlnp | grep -q ':3002 '; then
     success "Terminal WebSocket ready on :3002"
   else
-    warn "Terminal WebSocket may still be starting (check: docker logs agentos-terminal)"
+    warn "Terminal WebSocket may still be starting (check: docker logs agentgls-terminal)"
   fi
 }
 
 configure_caddy_if_requested() {
-  if [[ -z "${AGENTOS_DOMAIN:-}" ]]; then
+  if [[ -z "${AGENTGLS_DOMAIN:-}" ]]; then
     info "No domain provided during bootstrap; onboarding will handle domain configuration later"
     return
   fi
 
-  step "Configuring Caddy for dashboard.${AGENTOS_DOMAIN}..."
+  step "Configuring Caddy for dashboard.${AGENTGLS_DOMAIN}..."
   cat > /etc/caddy/Caddyfile <<EOF
-dashboard.${AGENTOS_DOMAIN} {
+dashboard.${AGENTGLS_DOMAIN} {
 	reverse_proxy /ws/terminal localhost:3002
 	reverse_proxy localhost:3000
 }
@@ -410,7 +410,7 @@ install_provider_if_selected() {
   fi
 
   step "Installing selected provider: ${AGENTGLS_PROVIDER}"
-  sudo -u "$AGENTOS_USER" bash -lc "cd '$INSTALL_DIR' && '$INSTALL_DIR/scripts/install-provider.sh' install '$AGENTGLS_PROVIDER'"
+  sudo -u "$AGENTGLS_USER" bash -lc "cd '$INSTALL_DIR' && '$INSTALL_DIR/scripts/install-provider.sh' install '$AGENTGLS_PROVIDER'"
   success "Provider installation finished"
 }
 
@@ -418,36 +418,36 @@ install_crontab() {
   step "Installing base cron jobs..."
 
   local cron_content="# AgentGLS base maintenance
-*/5 * * * * /opt/agentos/scripts/watchdog.sh >> /opt/agentos/logs/watchdog.log 2>&1
-*/5 * * * * /opt/agentos/scripts/sync-secrets.sh >> /opt/agentos/logs/secrets-sync.log 2>&1
-*/10 * * * * /opt/agentos/scripts/security-sync.sh >> /opt/agentos/logs/security.log 2>&1
-*/10 * * * * /opt/agentos/scripts/server-health.sh >> /opt/agentos/logs/health.log 2>&1
-*/30 * * * * /opt/agentos/scripts/sync-sessions.sh >> /opt/agentos/logs/sync.log 2>&1
-0 * * * * /opt/agentos/scripts/goalloop-heartbeat.sh >> /opt/agentos/logs/goalloop-heartbeat.log 2>&1
-*/30 * * * * /opt/agentos/scripts/goalloop-sync.sh >> /opt/agentos/logs/goalloop-sync.log 2>&1
-0 */2 * * * /opt/agentos/scripts/daily-summary.sh >> /opt/agentos/logs/daily-summary.log 2>&1
-0 3 * * * /opt/agentos/scripts/memory-consolidate.sh >> /opt/agentos/logs/memory-consolidate.log 2>&1"
+*/5 * * * * /opt/agentgls/scripts/watchdog.sh >> /opt/agentgls/logs/watchdog.log 2>&1
+*/5 * * * * /opt/agentgls/scripts/sync-secrets.sh >> /opt/agentgls/logs/secrets-sync.log 2>&1
+*/10 * * * * /opt/agentgls/scripts/security-sync.sh >> /opt/agentgls/logs/security.log 2>&1
+*/10 * * * * /opt/agentgls/scripts/server-health.sh >> /opt/agentgls/logs/health.log 2>&1
+*/30 * * * * /opt/agentgls/scripts/sync-sessions.sh >> /opt/agentgls/logs/sync.log 2>&1
+0 * * * * /opt/agentgls/scripts/goalloop-heartbeat.sh >> /opt/agentgls/logs/goalloop-heartbeat.log 2>&1
+*/30 * * * * /opt/agentgls/scripts/goalloop-sync.sh >> /opt/agentgls/logs/goalloop-sync.log 2>&1
+0 */2 * * * /opt/agentgls/scripts/daily-summary.sh >> /opt/agentgls/logs/daily-summary.log 2>&1
+0 3 * * * /opt/agentgls/scripts/memory-consolidate.sh >> /opt/agentgls/logs/memory-consolidate.log 2>&1"
 
-  echo "$cron_content" | crontab -u "$AGENTOS_USER" -
+  echo "$cron_content" | crontab -u "$AGENTGLS_USER" -
   success "Base cron jobs installed"
 }
 
 restore_scheduled_task_cron() {
   step "Re-syncing scheduled task cron entries..."
 
-  if sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/tasks.sh" sync >/dev/null 2>&1; then
+  if sudo -u "$AGENTGLS_USER" bash "$INSTALL_DIR/scripts/tasks.sh" sync >/dev/null 2>&1; then
     success "Scheduled task cron entries synced from database"
   else
-    warn "Scheduled task cron re-sync failed; rerun /opt/agentos/scripts/tasks.sh sync after bootstrap if tasks already exist"
+    warn "Scheduled task cron re-sync failed; rerun /opt/agentgls/scripts/tasks.sh sync after bootstrap if tasks already exist"
   fi
 }
 
 run_initial_sync() {
   step "Running initial health sync..."
-  sudo -H -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/watchdog.sh" 2>/dev/null || true
-  sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/security-sync.sh" 2>/dev/null || true
-  sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/server-health.sh" 2>/dev/null || true
-  sudo -u "$AGENTOS_USER" bash "$INSTALL_DIR/scripts/goalloop-sync.sh" 2>/dev/null || true
+  sudo -H -u "$AGENTGLS_USER" bash "$INSTALL_DIR/scripts/watchdog.sh" 2>/dev/null || true
+  sudo -u "$AGENTGLS_USER" bash "$INSTALL_DIR/scripts/security-sync.sh" 2>/dev/null || true
+  sudo -u "$AGENTGLS_USER" bash "$INSTALL_DIR/scripts/server-health.sh" 2>/dev/null || true
+  sudo -u "$AGENTGLS_USER" bash "$INSTALL_DIR/scripts/goalloop-sync.sh" 2>/dev/null || true
   success "Initial sync complete"
 }
 
@@ -462,8 +462,8 @@ print_banner() {
   echo -e "${GREEN}============================================${NC}"
   echo ""
   echo -e "  Dashboard: ${BLUE}http://${server_ip}:3000${NC}"
-  if [[ -n "${AGENTOS_DOMAIN:-}" ]]; then
-    echo -e "  Domain:    ${BLUE}https://dashboard.${AGENTOS_DOMAIN}${NC}"
+  if [[ -n "${AGENTGLS_DOMAIN:-}" ]]; then
+    echo -e "  Domain:    ${BLUE}https://dashboard.${AGENTGLS_DOMAIN}${NC}"
   fi
   echo ""
   echo -e "  ${YELLOW}Next steps:${NC}"
@@ -479,7 +479,7 @@ print_banner() {
   fi
   echo ""
   echo "  Manual status check:"
-  echo "    bash /opt/agentos/scripts/status.sh"
+  echo "    bash /opt/agentgls/scripts/status.sh"
   echo ""
 }
 

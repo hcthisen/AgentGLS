@@ -4,7 +4,7 @@ This is the canonical operational instruction file for the deployed AgentGLS run
 
 ## Runtime Model
 
-- Work from `/opt/agentos`.
+- Work from `/opt/agentgls`.
 - Treat `AGENTS.md` as canonical and `CLAUDE.md` as a thin compatibility shim.
 - The active provider may be `claude` or `codex`.
 - Human chat, GoalLoop heartbeats, scheduled tasks, and summaries all run through provider-neutral host adapters.
@@ -12,12 +12,12 @@ This is the canonical operational instruction file for the deployed AgentGLS run
 
 ## GoalLoop Execution Protocol
 
-You operate a GoalLoop system. Goals are markdown files with YAML front matter in `/opt/agentos/goals/`.
+You operate a GoalLoop system. Goals are markdown files with YAML front matter in `/opt/agentgls/goals/`.
 All front-matter reads and writes must go through `goalmeta.py`.
 
 ### Directory Layout
 
-`/opt/agentos/goals/`
+`/opt/agentgls/goals/`
 - `_context.md` for standing business context
 - `_runbook.md` for cross-goal learnings
 - `active/` for runnable goals
@@ -29,16 +29,16 @@ All front-matter reads and writes must go through `goalmeta.py`.
 
 ### Goal File Operations
 
-Use `python3 /opt/agentos/scripts/goalmeta.py` for all front-matter mutations:
+Use `python3 /opt/agentgls/scripts/goalmeta.py` for all front-matter mutations:
 - `get <file> <field>`
 - `set <file> <field> <value>`
 - `finalize <file>`
-- `complete <file> /opt/agentos/goals/completed`
-- `pause <file> /opt/agentos/goals/paused`
+- `complete <file> /opt/agentgls/goals/completed`
+- `pause <file> /opt/agentgls/goals/paused`
 - `criteria <file>`
 - `scoreboard <file>`
 - `check-runnable <file>`
-- `reconcile-parent <parent_file> /opt/agentos/goals/active`
+- `reconcile-parent <parent_file> /opt/agentgls/goals/active`
 
 You may edit the markdown body directly, but do not hand-edit front matter.
 
@@ -46,7 +46,7 @@ You may edit the markdown body directly, but do not hand-edit front matter.
 
 - Telegram ingress and egress are provider-neutral.
 - Inbound human messages arrive through `telegram-bridge.py`.
-- Outbound Telegram delivery is handled by `bash /opt/agentos/scripts/send-telegram.sh <chat_id> "<text>"`.
+- Outbound Telegram delivery is handled by `bash /opt/agentgls/scripts/send-telegram.sh <chat_id> "<text>"`.
 - Reply to the human directly and keep the answer concise unless they ask for depth.
 - Do not tell the model to send its own Telegram message. The bridge delivers outbound text.
 
@@ -67,7 +67,7 @@ When a goal uses `approval_policy: manual`:
 3. The next claim clears that flag automatically.
 
 Pause and resume flow:
-1. When blocked on human input, log the blocker and use `goalmeta.py pause <file> /opt/agentos/goals/paused`.
+1. When blocked on human input, log the blocker and use `goalmeta.py pause <file> /opt/agentgls/goals/paused`.
 2. Notify the human through `send-telegram.sh`.
 3. To resume later, move the file back into `goals/active/` and keep the same slug unless a rename is necessary.
 
@@ -81,8 +81,8 @@ When a heartbeat wakes you:
 5. Update the run log, scoreboard, and any verified finish criteria.
 6. Run exactly one cleanup action:
    - `goalmeta.py finalize <file>`
-   - `goalmeta.py complete <file> /opt/agentos/goals/completed`
-   - `goalmeta.py pause <file> /opt/agentos/goals/paused`
+   - `goalmeta.py complete <file> /opt/agentgls/goals/completed`
+   - `goalmeta.py pause <file> /opt/agentgls/goals/paused`
 
 Never leave `run_state: running` behind.
 
@@ -99,7 +99,7 @@ A finish criterion can be checked only after its outputs are `verified`.
 
 ### Resource Locks
 
-Before mutating a shared surface, acquire a lock under `/opt/agentos/goals/locks/`:
+Before mutating a shared surface, acquire a lock under `/opt/agentgls/goals/locks/`:
 - `wordpress_prod_<domain>.lock`
 - `ghl_social_<location_id>.lock`
 - `email_outbound_<domain>.lock`

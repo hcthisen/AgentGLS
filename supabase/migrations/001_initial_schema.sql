@@ -1,4 +1,4 @@
--- AgentOS-CC: Initial Database Schema
+-- AgentGLS: Initial Database Schema
 -- Idempotent — safe to re-run
 
 -- ============================================================

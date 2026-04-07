@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ROOT = Path(os.environ.get("AGENTOS_DIR", "/opt/agentos"))
+ROOT = Path(os.environ.get("AGENTGLS_DIR", "/opt/agentgls"))
 ENV_PATH = ROOT / ".env"
 CONFIG_DIR = ROOT / "config"
 TEMPLATE_SOURCE_DIR = CONFIG_DIR / "goal-templates"
@@ -26,7 +26,7 @@ RUNBOOK_PATH = GOALS_DIR / "_runbook.md"
 CONTEXT_PATH = GOALS_DIR / "_context.md"
 
 ENV_ORDER = [
-    "AGENTOS_DOMAIN",
+    "AGENTGLS_DOMAIN",
     "AGENTGLS_PROVIDER",
     "AGENTGLS_ADMIN_NAME",
     "AGENTGLS_ADMIN_EMAIL",
@@ -165,10 +165,10 @@ def set_domain() -> None:
 
     env = load_env()
     if skip or not domain:
-        env["AGENTOS_DOMAIN"] = ""
+        env["AGENTGLS_DOMAIN"] = ""
         env["AGENTGLS_DOMAIN_SKIPPED"] = "1"
     else:
-        env["AGENTOS_DOMAIN"] = domain
+        env["AGENTGLS_DOMAIN"] = domain
         env["AGENTGLS_DOMAIN_SKIPPED"] = "0"
     write_env(env)
 
@@ -270,7 +270,7 @@ def status() -> None:
         "adminEmail": env.get("AGENTGLS_ADMIN_EMAIL", ""),
         "adminName": env.get("AGENTGLS_ADMIN_NAME", ""),
         "provider": env.get("AGENTGLS_PROVIDER", ""),
-        "domain": env.get("AGENTOS_DOMAIN", ""),
+        "domain": env.get("AGENTGLS_DOMAIN", ""),
         "domainSkipped": env.get("AGENTGLS_DOMAIN_SKIPPED", "0") == "1",
         "telegramConfigured": bool(env.get("TELEGRAM_BOT_TOKEN")),
         "telegramSkipped": env.get("AGENTGLS_TELEGRAM_SKIPPED", "0") == "1",

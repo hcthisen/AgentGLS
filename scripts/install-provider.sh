@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-INSTALL_DIR="${AGENTOS_DIR:-/opt/agentos}"
+INSTALL_DIR="${AGENTGLS_DIR:-/opt/agentgls}"
 
 load_env() {
   if [[ -f "$INSTALL_DIR/.env" ]]; then
@@ -106,7 +106,7 @@ Usage:
   install-provider.sh status [claude|codex]
   install-provider.sh auth-status [claude|codex]
 
-If no provider argument is provided, AGENTGLS_PROVIDER from /opt/agentos/.env is used.
+If no provider argument is provided, AGENTGLS_PROVIDER from /opt/agentgls/.env is used.
 EOF
 }
 

@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
 # telegram-setup.sh — Guided Telegram Bot API setup for AgentGLS
-# Run as the agentos user after bootstrap.
+# Run as the agentgls user after bootstrap.
 #
 # Can also be run with:
-#   AGENTOS_TELEGRAM_TOKEN=123:AAH... bash telegram-setup.sh
+#   AGENTGLS_TELEGRAM_TOKEN=123:AAH... bash telegram-setup.sh
 # ============================================================
 
 set -euo pipefail
@@ -85,16 +85,16 @@ echo "  4. Choose a unique username ending in 'bot'"
 echo "  5. Copy the bot token BotFather returns"
 echo ""
 
-echo -e "${BOLD}Step 2 — Store the bot token in /opt/agentos/.env${NC}"
+echo -e "${BOLD}Step 2 — Store the bot token in /opt/agentgls/.env${NC}"
 echo ""
 
-TOKEN="${AGENTOS_TELEGRAM_TOKEN:-}"
+TOKEN="${AGENTGLS_TELEGRAM_TOKEN:-}"
 NEED_TOKEN=true
 
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   info "Existing token found: ${TELEGRAM_BOT_TOKEN:0:10}..."
   if [[ -n "$TOKEN" ]]; then
-    info "Overwriting with token from AGENTOS_TELEGRAM_TOKEN"
+    info "Overwriting with token from AGENTGLS_TELEGRAM_TOKEN"
   else
     read -rp "  Keep the existing token? (Y/n): " keep
     if [[ "${keep,,}" != "n" ]]; then
@@ -109,7 +109,7 @@ if $NEED_TOKEN; then
   if [[ -z "$TOKEN" ]]; then
     read -rp "  Paste your bot token: " TOKEN
   else
-    info "Using token from AGENTOS_TELEGRAM_TOKEN"
+    info "Using token from AGENTGLS_TELEGRAM_TOKEN"
   fi
 
   if [[ -z "$TOKEN" ]]; then

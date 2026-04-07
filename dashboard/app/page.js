@@ -355,7 +355,7 @@ function SetupPanel({ setupState, authenticated, onSetupUpdate, onAuthenticated 
 
         <SetupCard title="5. Telegram" status={telegramStatus}>
           <p className="setup-copy">
-            Store the bot token here, then pair the operator chat with <code>/opt/agentos/scripts/telegram-setup.sh</code>.
+            Store the bot token here, then pair the operator chat with <code>/opt/agentgls/scripts/telegram-setup.sh</code>.
           </p>
           <input
             type="password"
@@ -379,7 +379,7 @@ function SetupPanel({ setupState, authenticated, onSetupUpdate, onAuthenticated 
 
         <SetupCard title="6. Business context" status={contextStatus}>
           <p className="setup-copy">
-            This becomes <code>/opt/agentos/goals/_context.md</code> and is the standing context for future GoalLoop work.
+            This becomes <code>/opt/agentgls/goals/_context.md</code> and is the standing context for future GoalLoop work.
           </p>
           <textarea
             rows={8}
@@ -400,7 +400,7 @@ function SetupPanel({ setupState, authenticated, onSetupUpdate, onAuthenticated 
 
         <SetupCard title="7. Initial goal" status={goalStatus}>
           <p className="setup-copy">
-            The first goal file is created in <code>/opt/agentos/goals/active/</code> with <code>brief_status: draft</code>.
+            The first goal file is created in <code>/opt/agentgls/goals/active/</code> with <code>brief_status: draft</code>.
           </p>
           <input
             type="text"

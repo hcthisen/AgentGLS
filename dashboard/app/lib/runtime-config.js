@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-export const HOST_MOUNT = process.env.AGENTOS_HOST_MOUNT || '/opt/agentos-host'
+export const HOST_MOUNT = process.env.AGENTGLS_HOST_MOUNT || '/opt/agentgls-host'
 export const ENV_PATH = path.join(HOST_MOUNT, '.env')
 export const GOALS_PATH = path.join(HOST_MOUNT, 'goals')
 

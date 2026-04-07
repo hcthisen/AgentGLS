@@ -4,9 +4,9 @@ import ssh2 from 'ssh2'
 const { Client } = ssh2
 
 const SSH_HOST = process.env.SSH_HOST || 'host.docker.internal'
-const SSH_USER = process.env.SSH_USER || 'agentos'
+const SSH_USER = process.env.SSH_USER || 'agentgls'
 const SSH_KEY_PATH = '/ssh-key/id_ed25519'
-const HOST_INSTALL_DIR = '/opt/agentos'
+const HOST_INSTALL_DIR = '/opt/agentgls'
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`

@@ -2,7 +2,7 @@
 
 ## Objective
 
-Update the current **AgentOS-CC** codebase into **AgentGLS** by implementing the **GoalLoop System — v6** and adding **runtime-provider choice** so the system can run on either:
+Update the current **AgentGLS** codebase by implementing the **GoalLoop System — v6** and adding **runtime-provider choice** so the system can run on either:
 
 - **Claude Code** (`claude`)
 - **OpenAI Codex** (`codex`)
@@ -74,7 +74,7 @@ But use the provider CLIs in **resumable headless mode** for actual automation t
 
 This repo includes `Reference-Code-Repos/` with two complete, known-good products. They are included as **implementation references only** for two specific areas:
 
-- `Reference-Code-Repos/Telegram implementation referenc - AgenOS/`
+- `Reference-Code-Repos/` Telegram implementation reference
   - Use as reference for **Telegram integration** implementation details and flow shape.
 - `Reference-Code-Repos/Setup and Onboarding implementaion reference - Paperclip/`
   - Use as reference for the **setup and onboarding experience**.
@@ -93,15 +93,12 @@ Rules for using these references:
 
 These are requirements unless explicitly changed later.
 
-- **External rebrand now; runtime compatibility names stay stable in this pass.**
-  - Rebrand repo/docs/UI from **AgentOS-CC** to **AgentGLS**.
-  - Keep the current runtime-compatible internal names for now:
-    - `/opt/agentos`
-    - `agentos` Linux user
-    - `agentos-*` container names
-    - existing `cc_*` tables
-    - existing `AGENTOS_*` env vars
-  - Reason: reduces migration risk.
+- **AgentGLS runtime names are the default in this repo.**
+  - Use `/opt/agentgls`
+  - Use the `agentgls` Linux user
+  - Use `agentgls-*` container names
+  - Keep the existing `cc_*` tables for now
+  - Use `AGENTGLS_*` env vars
 
 - **One active provider at a time.**
   - The onboarding flow chooses `claude` or `codex`.
@@ -123,7 +120,7 @@ These are requirements unless explicitly changed later.
   - Use the Paperclip reference repo to inform the AgentGLS onboarding experience, not as a dependency.
 
 - **GoalLoop remains file-first.**
-  - Goal files in `/opt/agentos/goals/` are the source of truth.
+  - Goal files in `/opt/agentgls/goals/` are the source of truth.
   - PostgreSQL/PostgREST is only a read-only dashboard projection for goal status.
 
 - **Scheduled tasks stay, but they become provider-neutral.**
@@ -149,7 +146,7 @@ These are requirements unless explicitly changed later.
 
 Codex should preserve and build on the following existing behavior from the current repo:
 
-- bootstrap installs the host stack and writes `/opt/agentos/.env`
+- bootstrap installs the host stack and writes `/opt/agentgls/.env`
 - Docker Compose runs PostgreSQL, PostgREST, dashboard, and terminal
 - PostgREST is on `127.0.0.1:3001`
 - dashboard is on `127.0.0.1:3000`
@@ -192,7 +189,7 @@ Telegram Bot API  ---> │ telegram-bridge.py                 │
 Create dedicated working directories under the repo root so both providers can keep separate conversation histories:
 
 ```text
-/opt/agentos/runtime/
+/opt/agentgls/runtime/
 ├── human/
 ├── goalloop/
 ├── scheduled/
@@ -203,7 +200,7 @@ Reason:
 
 - Codex discovers `AGENTS.md` by walking from project root to cwd.
 - Claude discovers `CLAUDE.md` in the project tree.
-- Keeping these working dirs **inside** `/opt/agentos` ensures both providers load the same repo-level instructions.
+- Keeping these working dirs **inside** `/opt/agentgls` ensures both providers load the same repo-level instructions.
 - Each channel gets isolated session continuity.
 
 ### tmux model
@@ -231,10 +228,10 @@ At the repo root:
 - ...only add truly Claude-specific instructions here...
 ```
 
-On the deployed VPS under `/opt/agentos`:
+On the deployed VPS under `/opt/agentgls`:
 
-- `/opt/agentos/AGENTS.md` — canonical operational protocol
-- `/opt/agentos/CLAUDE.md` — shim importing `@AGENTS.md`
+- `/opt/agentgls/AGENTS.md` — canonical operational protocol
+- `/opt/agentgls/CLAUDE.md` — shim importing `@AGENTS.md`
 
 ---
 
@@ -246,7 +243,7 @@ Add the following to the host config model:
 - `TELEGRAM_BOT_TOKEN=...`
 - optional: `AGENTGLS_TELEGRAM_ALLOWED_CHAT_IDS=` (if later useful)
 
-Store the active provider in `/opt/agentos/.env` for this pass.
+Store the active provider in `/opt/agentgls/.env` for this pass.
 
 Do **not** add a database-backed runtime-settings UI in this pass unless it is needed for the dashboard display.
 
@@ -315,13 +312,13 @@ Rebrand the project to AgentGLS and establish a multi-provider instruction model
 
 ### Tasks
 
-- [x] Rebrand user-facing docs/UI strings from **AgentOS-CC** to **AgentGLS**.
-- [x] Keep compatibility runtime names (`/opt/agentos`, `agentos`, `agentos-*`, `cc_*`) unchanged in this pass.
+- [x] Rebrand user-facing docs/UI strings to **AgentGLS**.
+- [x] Use AgentGLS runtime names (`/opt/agentgls`, `agentgls`, `agentgls-*`, `cc_*`) throughout the repo.
 - [x] Add a root-level `AGENTS.md` as the **canonical** repo instructions.
 - [x] Add a root-level `CLAUDE.md` that imports `@AGENTS.md`.
 - [x] Update any existing repo-specific instruction docs so they no longer assume Claude-only behavior.
 - [x] Add a short repo note explaining:
-  - AgentGLS is the rebrand of AgentOS-CC
+  - AgentGLS is the current runtime and product name
   - AGENTS.md is canonical
   - CLAUDE.md exists only for Claude compatibility
 
@@ -373,7 +370,7 @@ Add provider support to bootstrap, expose the dashboard immediately, and move no
 - [x] Create runtime session directories:
 
 ```bash
-/opt/agentos/runtime/{human,goalloop,scheduled,summary}
+/opt/agentgls/runtime/{human,goalloop,scheduled,summary}
 ```
 
 ### Final task
@@ -405,7 +402,7 @@ Create one provider abstraction used by every automation path.
 
 #### `provider-lib.sh`
 
-- [x] Load `/opt/agentos/.env`
+- [x] Load `/opt/agentgls/.env`
 - [x] expose active provider
 - [x] resolve channel working dirs:
   - `human`
@@ -450,7 +447,7 @@ Use the CLI’s approval-bypass flag only inside the hardened VPS environment.
 
 ### Implementation rules
 
-- [x] Keep the working dir inside `/opt/agentos/runtime/<channel>` so provider session discovery stays scoped.
+- [x] Keep the working dir inside `/opt/agentgls/runtime/<channel>` so provider session discovery stays scoped.
 - [x] Do not hardcode model names in v1 unless already required by the repo.
 - [x] Keep model/provider tuning in one place if added later.
 - [x] Make the adapter reusable from:
@@ -505,14 +502,14 @@ Webhook mode can be a later enhancement if desired, but long polling is sufficie
 
 - [x] long-poll Telegram Bot API for updates
 - [x] support pairing / allowlist mode
-- [x] persist allowlist locally on disk under `/opt/agentos/state/telegram/`
+- [x] persist allowlist locally on disk under `/opt/agentgls/state/telegram/`
 - [x] ignore or reject messages from unpaired chats
 - [x] for each accepted user message:
   - build a provider-neutral prompt envelope
   - call `provider-run.sh human <prompt_file>`
   - capture stdout
   - send stdout back via `send-telegram.sh`
-- [x] log inbound/outbound activity to `/opt/agentos/logs/telegram-bridge.log`
+- [x] log inbound/outbound activity to `/opt/agentgls/logs/telegram-bridge.log`
 
 ### Pairing rules
 
@@ -596,7 +593,7 @@ Add the GoalLoop runtime directories, templates, and canonical operational instr
 - [x] Create GoalLoop dirs:
 
 ```bash
-/opt/agentos/goals/
+/opt/agentgls/goals/
 ├── active/
 ├── paused/
 ├── completed/
@@ -606,14 +603,14 @@ Add the GoalLoop runtime directories, templates, and canonical operational instr
 ```
 
 - [x] Create runtime files if absent:
-  - `/opt/agentos/goals/_runbook.md`
-  - `/opt/agentos/goals/_context.md`
-- [x] Add starter templates in repo + copy to `/opt/agentos/goals/templates/` if missing.
+  - `/opt/agentgls/goals/_runbook.md`
+  - `/opt/agentgls/goals/_context.md`
+- [x] Add starter templates in repo + copy to `/opt/agentgls/goals/templates/` if missing.
 - [x] Add `config/runtime-agents.md` as the canonical operational protocol.
 - [x] Add `config/claude-shim.md` for the VPS `CLAUDE.md` shim.
 - [x] Bootstrap should write:
-  - `/opt/agentos/AGENTS.md` from the canonical runtime instructions
-  - `/opt/agentos/CLAUDE.md` from the shim importing `@AGENTS.md`
+  - `/opt/agentgls/AGENTS.md` from the canonical runtime instructions
+  - `/opt/agentgls/CLAUDE.md` from the shim importing `@AGENTS.md`
 
 ### Runtime instruction requirements
 
@@ -634,8 +631,8 @@ The canonical runtime instructions must include:
 
 ### Acceptance
 
-- [x] `/opt/agentos/AGENTS.md` is canonical on the VPS.
-- [x] `/opt/agentos/CLAUDE.md` only imports it plus minimal Claude-only notes.
+- [x] `/opt/agentgls/AGENTS.md` is canonical on the VPS.
+- [x] `/opt/agentgls/CLAUDE.md` only imports it plus minimal Claude-only notes.
 - [x] GoalLoop dirs/templates exist.
 
 ---
@@ -663,7 +660,7 @@ Add one deterministic parser/mutator for all goal file operations.
 
 - [x] PyYAML required. No fallback parser.
 - [x] atomic writes = temp file + rename
-- [x] `claim` uses global lock `/opt/agentos/goals/locks/_claim.lock`
+- [x] `claim` uses global lock `/opt/agentgls/goals/locks/_claim.lock`
 - [x] `claim` must atomically:
   - recover stale `running` goals older than 2h
   - pick best eligible leaf
@@ -922,7 +919,7 @@ Prove the multi-provider GoalLoop system works end to end.
 
 - [ ] Codex sees repo `AGENTS.md`
 - [ ] Claude sees repo `CLAUDE.md` and imported `AGENTS.md`
-- [ ] deployed `/opt/agentos/AGENTS.md` is canonical
+- [ ] deployed `/opt/agentgls/AGENTS.md` is canonical
 
 #### Telegram bridge
 
@@ -974,7 +971,7 @@ Prove the multi-provider GoalLoop system works end to end.
 The migration is done when all of the following are true:
 
 - [ ] project is rebranded to AgentGLS in docs/UI
-- [ ] runtime compatibility names remain stable where planned
+- [x] runtime defaults use AgentGLS naming where planned
 - [ ] provider selection exists in bootstrap and config
 - [ ] selected runtime can be either Claude or Codex
 - [ ] `AGENTS.md` is canonical
@@ -995,11 +992,11 @@ The migration is done when all of the following are true:
 
 Do **not** do these unless forced by implementation reality:
 
-- [ ] full rename from `/opt/agentos` to `/opt/agentgls`
-- [ ] full rename of `agentos-*` containers
+- [x] full runtime path rename to `/opt/agentgls`
+- [x] full container-name rename to the `agentgls-*` pattern
 - [ ] full rename of `cc_*` DB tables
 - [ ] a separate standalone onboarding repo for the core setup flow
-- [ ] full admin chat / task-queue architecture from `agent-os`
+- [ ] full admin chat / task-queue architecture from a separate product line
 - [ ] multi-agent orchestration
 - [ ] structured `cc_goal_runs`
 - [ ] write-capable dashboard goal management
@@ -1030,11 +1027,10 @@ Do **not** do these unless forced by implementation reality:
 Use these as source material while implementing:
 
 - GoalLoop System — v6 (user-provided spec in this repo)
-- `Reference-Code-Repos/Telegram implementation referenc - AgenOS/` for Telegram integration reference
+- `Reference-Code-Repos/` Telegram implementation reference for Telegram behavior patterns
 - `Reference-Code-Repos/Setup and Onboarding implementaion reference - Paperclip/` for setup/onboarding reference
 - Prefer the Paperclip onboarding flow as the benchmark for setup UX
-- AgentOS-CC repo: current bootstrap, scripts, migrations, dashboard structure
-- `agent-os` repo: provider-neutral runtime model, AGENTS/CLAUDE co-existence, Telegram decoupled from provider runtime
+- AgentGLS repo: current bootstrap, scripts, migrations, dashboard structure
 - Codex docs:
   - AGENTS.md discovery
   - Codex CLI install/auth
@@ -1048,7 +1044,7 @@ Use these as source material while implementing:
 
 ## Final Note For Codex
 
-Implement this against the **current AgentOS-CC repository structure**, not a greenfield redesign.
+Implement this against the **current AgentGLS repository structure**, not a greenfield redesign.
 
 The most important architectural pivots in this updated plan are:
 

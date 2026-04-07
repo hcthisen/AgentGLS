@@ -13,7 +13,7 @@ if [[ -f "$CRED_FILE" ]]; then source "$CRED_FILE"; else echo "ERROR: $CRED_FILE
 SUPABASE_URL="${SUPABASE_URL:-http://localhost:3001}"
 SUPABASE_KEY="${SUPABASE_SERVICE_ROLE_KEY}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="/opt/agentos/logs"
+LOG_DIR="/opt/agentgls/logs"
 CRON_MARKER="# AGENT_TASK"
 
 # --- Helpers ---
@@ -242,7 +242,7 @@ for t in data:
         tid = t['id']
         cron = t['cron_expr']
         print(f'# AGENT_TASK:{tid}')
-        print(f'{cron} /opt/agentos/scripts/task-runner.sh {tid} >> /opt/agentos/logs/tasks.log 2>&1')
+        print(f'{cron} /opt/agentgls/scripts/task-runner.sh {tid} >> /opt/agentgls/logs/tasks.log 2>&1')
 ")
 
   if [[ -n "$additions" ]]; then
@@ -283,9 +283,9 @@ for t in data:
         tid = t['id']
         print(f'Catch-up: running missed task {tid[:8]}')
         subprocess.Popen(
-            ['bash', '/opt/agentos/scripts/task-runner.sh', tid],
-            stdout=open('/opt/agentos/logs/tasks.log', 'a'),
-            stderr=open('/opt/agentos/logs/tasks.log', 'a')
+            ['bash', '/opt/agentgls/scripts/task-runner.sh', tid],
+            stdout=open('/opt/agentgls/logs/tasks.log', 'a'),
+            stderr=open('/opt/agentgls/logs/tasks.log', 'a')
         )
 " 2>&1
 }

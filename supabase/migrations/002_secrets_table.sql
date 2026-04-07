@@ -1,4 +1,4 @@
--- AgentOS-CC Migration 002: Secrets table
+-- AgentGLS Migration 002: Secrets table
 -- Idempotent — safe to re-run
 
 CREATE TABLE IF NOT EXISTS cc_secrets (

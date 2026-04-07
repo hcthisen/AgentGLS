@@ -10,7 +10,7 @@ overview = {}
 
 # Scripts
 try:
-    overview['scripts'] = sorted(os.listdir('/opt/agentos/scripts/'))
+    overview['scripts'] = sorted(os.listdir('/opt/agentgls/scripts/'))
 except:
     overview['scripts'] = []
 
@@ -29,7 +29,7 @@ except:
     overview['cronjobs'] = []
 
 # Log files with sizes
-log_dirs = ['/opt/agentos/logs', os.path.join(home, '.claude', 'logs')]
+log_dirs = ['/opt/agentgls/logs', os.path.join(home, '.claude', 'logs')]
 logs = []
 for d in log_dirs:
     try:
@@ -58,7 +58,7 @@ except:
 
 # Git repos
 repos = []
-for search_dir in ['/opt/agentos', os.path.join(home, 'repos'), home]:
+for search_dir in ['/opt/agentgls', os.path.join(home, 'repos'), home]:
     try:
         for entry in os.listdir(search_dir):
             path = os.path.join(search_dir, entry)

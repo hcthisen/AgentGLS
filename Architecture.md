@@ -1,6 +1,6 @@
 # AgentGLS — Architecture Framework Document
 
-This document captures the legacy AgentOS-CC / Claude-first architecture that this repo started from. It remains useful as a baseline reference, but it is not the authoritative target architecture for the AgentGLS migration.
+This document captures the older Claude-first architecture that this repo started from. It remains useful as a baseline reference, but it is not the authoritative target architecture for the AgentGLS migration.
 
 > Status:
 > - `AGENTS.md` is the canonical repo instruction file.
@@ -539,7 +539,7 @@ Dashboard environment:
 ## 7. Folder Structure
 
 ```
-/opt/agentos/                          — Installation root
+/opt/agentgls/                          — Installation root
 ├── bootstrap.sh                       — Installer / updater script
 ├── docker-compose.yml                 — Supabase + dashboard services
 ├── Caddyfile                          — Reverse proxy configuration
@@ -607,16 +607,16 @@ Dashboard environment:
 | `SUPABASE_URL`                | `~/.claude/credentials/supabase.env`        | All sync scripts, memory.sh      |
 | `SUPABASE_SERVICE_ROLE_KEY`   | `~/.claude/credentials/supabase.env`        | All sync scripts (full DB access)|
 | `SUPABASE_ANON_KEY`           | `~/.claude/credentials/supabase.env`        | Dashboard API route (read-only)  |
-| `JWT_SECRET`                  | `/opt/agentos/.env` (auto-generated)        | Supabase internal auth           |
-| `POSTGRES_PASSWORD`           | `/opt/agentos/.env` (auto-generated)        | Supabase internal                |
-| `DASHBOARD_PASSWORD_HASH`     | `/opt/agentos/.env`                         | Dashboard auth                   |
+| `JWT_SECRET`                  | `/opt/agentgls/.env` (auto-generated)        | Supabase internal auth           |
+| `POSTGRES_PASSWORD`           | `/opt/agentgls/.env` (auto-generated)        | Supabase internal                |
+| `DASHBOARD_PASSWORD_HASH`     | `/opt/agentgls/.env`                         | Dashboard auth                   |
 
 ### Access Patterns
 
 - **VPS scripts** use `source ~/.claude/credentials/supabase.env`. This loads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as shell variables.
-- **Dashboard** uses `process.env.*` in Next.js API routes. Supabase keys are loaded from `/opt/agentos/.env` and are never bundled into client-side JavaScript.
+- **Dashboard** uses `process.env.*` in Next.js API routes. Supabase keys are loaded from `/opt/agentgls/.env` and are never bundled into client-side JavaScript.
 - **Summaries** are generated via `claude -p --model haiku` using the Claude Code CLI subscription — no API key file needed.
-- **Auto-generated secrets** (Postgres password, JWT secret, Supabase keys) are created by the bootstrap script and stored in `/opt/agentos/.env`.
+- **Auto-generated secrets** (Postgres password, JWT secret, Supabase keys) are created by the bootstrap script and stored in `/opt/agentgls/.env`.
 
 ### Security Rules
 
@@ -674,7 +674,7 @@ Dashboard environment:
 
 | What happens | Detection | Recovery |
 |---|---|---|
-| Password leaked | Unauthorized access observed | Update `DASHBOARD_PASSWORD_HASH` in `/opt/agentos/.env`; restart dashboard |
+| Password leaked | Unauthorized access observed | Update `DASHBOARD_PASSWORD_HASH` in `/opt/agentgls/.env`; restart dashboard |
 
 **Impact limited to:** Read-only view of security data. Dashboard has no write access to Supabase (uses anon key). No server control possible through the dashboard.
 
@@ -716,8 +716,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/<repo>/main/bootstrap.sh
 **Fully automated (no prompts):**
 
 ```bash
-AGENTOS_DOMAIN=example.com \
-AGENTOS_DASHBOARD_PASSWORD=supersecretpassword \
+AGENTGLS_DOMAIN=example.com \
+AGENTGLS_DASHBOARD_PASSWORD=supersecretpassword \
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF... \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<repo>/main/bootstrap.sh)"
 ```
@@ -728,16 +728,16 @@ TELEGRAM_BOT_TOKEN=123456:ABC-DEF... \
 Phase 1: System Dependencies
   1. Install Docker + Docker Compose (if missing)
   2. Install tmux, fail2ban, python3, curl, jq
-  3. Clone/update the repo to /opt/agentos
+  3. Clone/update the repo to /opt/agentgls
 
 Phase 2: Configuration
-  4. Prompt for domain (or read AGENTOS_DOMAIN env var)
+  4. Prompt for domain (or read AGENTGLS_DOMAIN env var)
   5. Prompt for dashboard password (or read env var)
   6. Prompt for Telegram bot token (optional, or read env var)
   7. Auto-generate secrets: Postgres password, JWT secret, Supabase anon/service keys
 
 Phase 3: Supabase + Database
-  9. Write /opt/agentos/.env with all config
+  9. Write /opt/agentgls/.env with all config
   10. Start Supabase via Docker Compose
   11. Run SQL migrations to create all tables:
       cc_sessions, cc_memory, cc_projects, cc_user_profile,
@@ -749,7 +749,7 @@ Phase 4: Dashboard + Caddy
   14. Start/reload Caddy (auto-provisions TLS certificates)
 
 Phase 5: Claude Code + Scripts
-  15. Deploy scripts to /opt/agentos/scripts/
+  15. Deploy scripts to /opt/agentgls/scripts/
   16. Create ~/.claude/credentials/ with supabase.env
   17. Configure Claude Code SessionStart hook in ~/.claude/settings.json
   18. Install cronjobs (watchdog, security-sync, health, session-sync, summary)
@@ -770,16 +770,16 @@ Phase 7: Verification
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AGENTOS_DOMAIN` | Yes* | Root domain pointed at the VPS |
-| `AGENTOS_DASHBOARD_PASSWORD` | Yes* | Dashboard login password |
+| `AGENTGLS_DOMAIN` | Yes* | Root domain pointed at the VPS |
+| `AGENTGLS_DASHBOARD_PASSWORD` | Yes* | Dashboard login password |
 | `TELEGRAM_BOT_TOKEN` | No* | Telegram bot token (from @BotFather) |
-| `AGENTOS_DIR` | No | Install directory (default: `/opt/agentos`) |
+| `AGENTGLS_DIR` | No | Install directory (default: `/opt/agentgls`) |
 
 \* Prompted interactively if not set as environment variable.
 
 ### Auto-Generated Secrets
 
-On first run, the bootstrap script generates and stores in `/opt/agentos/.env`:
+On first run, the bootstrap script generates and stores in `/opt/agentgls/.env`:
 
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET`
@@ -792,7 +792,7 @@ These are never manually managed. Re-running the bootstrap preserves existing se
 ### Post-Install Operations
 
 ```bash
-cd /opt/agentos
+cd /opt/agentgls
 
 # Check system status
 bash scripts/status.sh

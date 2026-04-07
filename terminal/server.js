@@ -7,12 +7,12 @@ const path = require('path')
 
 const PORT = 3002
 const SSH_HOST = process.env.SSH_HOST || 'host.docker.internal'
-const SSH_USER = process.env.SSH_USER || 'agentos'
+const SSH_USER = process.env.SSH_USER || 'agentgls'
 const SSH_KEY_PATH = '/ssh-key/id_ed25519'
-const HOST_MOUNT = process.env.AGENTOS_HOST_MOUNT || '/opt/agentos-host'
+const HOST_MOUNT = process.env.AGENTGLS_HOST_MOUNT || '/opt/agentgls-host'
 const ENV_PATH = path.join(HOST_MOUNT, '.env')
 const DEFAULT_TMUX_SESSION = process.env.AGENTGLS_TERMINAL_SESSION || 'agent'
-const DEFAULT_TMUX_WORKDIR = process.env.AGENTGLS_TERMINAL_WORKDIR || '/opt/agentos/runtime/human'
+const DEFAULT_TMUX_WORKDIR = process.env.AGENTGLS_TERMINAL_WORKDIR || '/opt/agentgls/runtime/human'
 const IDLE_TIMEOUT = 60 * 60 * 1000 // 60 minutes
 const PING_INTERVAL = 45 * 1000 // 45 seconds
 const MAX_MISSED_PONGS = 3 // tolerate 3 missed pongs (background tabs throttle timers)

@@ -55,10 +55,10 @@ export async function getSetupState() {
       manualInstallCommand: '',
     },
     domain: {
-      value: env.AGENTOS_DOMAIN || '',
-      configured: Boolean(env.AGENTOS_DOMAIN),
+      value: env.AGENTGLS_DOMAIN || '',
+      configured: Boolean(env.AGENTGLS_DOMAIN),
       skipped: env.AGENTGLS_DOMAIN_SKIPPED === '1',
-      done: Boolean(env.AGENTOS_DOMAIN) || env.AGENTGLS_DOMAIN_SKIPPED === '1',
+      done: Boolean(env.AGENTGLS_DOMAIN) || env.AGENTGLS_DOMAIN_SKIPPED === '1',
     },
     telegram: {
       configured: Boolean(env.TELEGRAM_BOT_TOKEN),

@@ -20,13 +20,13 @@ check() {
   if eval "$2" >/dev/null 2>&1; then ok "$1"; else fail "$1"; fi
 }
 
-run_as_agentos() {
+run_as_agentgls() {
   local command="$1"
 
-  if [[ "$(id -un)" == "$AGENTOS_USER" ]]; then
+  if [[ "$(id -un)" == "$AGENTGLS_USER" ]]; then
     bash -lc "$command"
   else
-    sudo -H -u "$AGENTOS_USER" bash -lc "$command"
+    sudo -H -u "$AGENTGLS_USER" bash -lc "$command"
   fi
 }
 
@@ -35,14 +35,14 @@ tmux_session_exists() {
   local quoted
 
   quoted="$(printf '%q' "$session")"
-  run_as_agentos "tmux has-session -t ${quoted}"
+  run_as_agentgls "tmux has-session -t ${quoted}"
 }
 
 telegram_bridge_running() {
   local quoted
 
   quoted="$(printf '%q' "$SCRIPT_DIR/provider-lib.sh")"
-  run_as_agentos "source ${quoted}; provider_telegram_bridge_running"
+  run_as_agentgls "source ${quoted}; provider_telegram_bridge_running"
 }
 
 count_goal_files() {
@@ -57,7 +57,7 @@ count_goal_files() {
 }
 
 INSTALL_DIR="$(provider_install_dir)"
-AGENTOS_USER="${AGENTOS_USER:-agentos}"
+AGENTGLS_USER="${AGENTGLS_USER:-agentgls}"
 
 load_agentgls_env
 
@@ -67,7 +67,7 @@ echo "======================"
 echo ""
 
 check "Docker running" "systemctl is-active docker"
-check "PostgreSQL container up" "docker ps | grep -q agentos-db"
+check "PostgreSQL container up" "docker ps | grep -q agentgls-db"
 check "PostgREST responding on :3001" "curl -sf http://localhost:3001/ >/dev/null"
 check "Dashboard responding on :3000" "curl -sf http://localhost:3000 >/dev/null"
 check "Terminal WebSocket listening on :3002" "ss -tln | grep -q ':3002 '"
@@ -81,13 +81,13 @@ echo "-------"
 if [[ -n "${AGENTGLS_PROVIDER:-}" ]]; then
   ok "Active provider: ${AGENTGLS_PROVIDER}"
 
-  if run_as_agentos "'$INSTALL_DIR/scripts/install-provider.sh' status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
+  if run_as_agentgls "'$INSTALL_DIR/scripts/install-provider.sh' status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
     ok "Provider binary present: ${AGENTGLS_PROVIDER}"
   else
     fail "Provider binary missing: ${AGENTGLS_PROVIDER}"
   fi
 
-  if run_as_agentos "'$INSTALL_DIR/scripts/install-provider.sh' auth-status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
+  if run_as_agentgls "'$INSTALL_DIR/scripts/install-provider.sh' auth-status '$AGENTGLS_PROVIDER'" >/dev/null 2>&1; then
     ok "Provider authenticated"
   else
     warn "Provider not authenticated yet"
@@ -146,11 +146,11 @@ echo ""
 echo "Access"
 echo "------"
 
-if [[ -n "${AGENTOS_DOMAIN:-}" ]]; then
-  if curl -sfk "https://dashboard.${AGENTOS_DOMAIN}" >/dev/null 2>&1; then
-    ok "Domain routing works: dashboard.${AGENTOS_DOMAIN}"
+if [[ -n "${AGENTGLS_DOMAIN:-}" ]]; then
+  if curl -sfk "https://dashboard.${AGENTGLS_DOMAIN}" >/dev/null 2>&1; then
+    ok "Domain routing works: dashboard.${AGENTGLS_DOMAIN}"
   else
-    warn "Domain configured but not reachable yet: dashboard.${AGENTOS_DOMAIN}"
+    warn "Domain configured but not reachable yet: dashboard.${AGENTGLS_DOMAIN}"
   fi
 else
   warn "No domain configured yet; use the onboarding flow on :3000"

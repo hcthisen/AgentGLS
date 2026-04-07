@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-MIGRATIONS_DIR="/opt/agentos/supabase/migrations"
-DB_CONTAINER="agentos-db"
+MIGRATIONS_DIR="/opt/agentgls/supabase/migrations"
+DB_CONTAINER="agentgls-db"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 

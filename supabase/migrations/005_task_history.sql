@@ -1,4 +1,4 @@
--- AgentOS-CC: Task Execution History
+-- AgentGLS: Task Execution History
 -- Stores results from each scheduled task run for memory and thread awareness
 
 CREATE TABLE IF NOT EXISTS cc_task_history (

@@ -1,7 +1,7 @@
 services:
   supabase-db:
     image: postgres:15-alpine
-    container_name: agentos-db
+    container_name: agentgls-db
     restart: unless-stopped
     ports:
       - "127.0.0.1:5432:5432"
@@ -21,7 +21,7 @@ services:
 
   supabase-rest:
     image: postgrest/postgrest:v12.2.3
-    container_name: agentos-rest
+    container_name: agentgls-rest
     restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3000"
@@ -37,7 +37,7 @@ services:
 
   dashboard:
     build: ./dashboard
-    container_name: agentos-dashboard
+    container_name: agentgls-dashboard
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -48,26 +48,26 @@ services:
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       SSH_HOST: host.docker.internal
-      SSH_USER: agentos
-      AGENTOS_HOST_MOUNT: /opt/agentos-host
+      SSH_USER: agentgls
+      AGENTGLS_HOST_MOUNT: /opt/agentgls-host
     volumes:
-      - .:/opt/agentos-host:ro
+      - .:/opt/agentgls-host:ro
       - ./terminal-ssh-key:/ssh-key/id_ed25519:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   terminal-ws:
     build: ./terminal
-    container_name: agentos-terminal
+    container_name: agentgls-terminal
     restart: unless-stopped
     ports:
       - "3002:3002"
     environment:
       SSH_HOST: host.docker.internal
-      SSH_USER: agentos
-      AGENTOS_HOST_MOUNT: /opt/agentos-host
+      SSH_USER: agentgls
+      AGENTGLS_HOST_MOUNT: /opt/agentgls-host
     volumes:
-      - .:/opt/agentos-host:ro
+      - .:/opt/agentgls-host:ro
       - ./terminal-ssh-key:/ssh-key/id_ed25519:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -4,14 +4,14 @@ This is the canonical repo instruction file for AgentGLS.
 
 ## Repo Status
 
-- AgentGLS is the rebrand of AgentOS-CC.
+- This repo now uses the AgentGLS runtime names end to end.
 - This repo is being migrated from a Claude-first baseline to the provider-neutral GoalLoop v6 design.
-- Keep runtime compatibility names stable unless a task explicitly changes them:
-  - `/opt/agentos`
-  - `agentos`
-  - `agentos-*`
+- Runtime defaults:
+  - `/opt/agentgls`
+  - `agentgls`
+  - `agentgls-*`
   - `cc_*`
-  - `AGENTOS_*`
+  - `AGENTGLS_*`
 
 ## Canonical Sources
 
@@ -25,10 +25,4 @@ This is the canonical repo instruction file for AgentGLS.
 - Prefer provider-neutral designs that work for both `claude` and `codex`.
 - Do not reintroduce the Claude Telegram plugin as a required dependency.
 - Build against the current repo structure rather than inventing a new one.
-- Rebrand user-facing repo/docs/UI surfaces to AgentGLS while keeping compatibility runtime names stable unless a later phase explicitly changes them.
-
-## Reference Repos
-
-- Use `Reference-Code-Repos/Telegram implementation referenc - AgenOS/` only as a reference for Telegram integration patterns.
-- Use `Reference-Code-Repos/Setup and Onboarding implementaion reference - Paperclip/` only as a reference for setup and onboarding UX. Prefer it as the benchmark for onboarding behavior.
-- Do not pull unrelated architecture or product scope from those repos.
+- Keep repo/docs/UI surfaces aligned with the AgentGLS runtime names unless a task explicitly introduces a new naming scheme.

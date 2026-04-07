@@ -1,6 +1,6 @@
 # AgentGLS
 
-AgentGLS is the rebrand of AgentOS-CC. It is a single-VPS agent system that is being migrated from a Claude-first baseline to the provider-neutral GoalLoop v6 architecture.
+AgentGLS is a single-VPS agent system built around the provider-neutral GoalLoop v6 architecture.
 
 ## Status
 
@@ -8,12 +8,12 @@ AgentGLS is the rebrand of AgentOS-CC. It is a single-VPS agent system that is b
 - Implementation plan: [PLAN.md](./PLAN.md)
 - Canonical repo instructions: [AGENTS.md](./AGENTS.md)
 - Claude compatibility shim: [CLAUDE.md](./CLAUDE.md)
-- Runtime compatibility names remain unchanged in this pass:
-  - `/opt/agentos`
-  - `agentos`
-  - `agentos-*`
+- Runtime defaults:
+  - `/opt/agentgls`
+  - `agentgls`
+  - `agentgls-*`
   - `cc_*`
-  - `AGENTOS_*`
+  - `AGENTGLS_*`
 
 ## What This Repo Contains
 
@@ -35,8 +35,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/b
 Bootstrap now does the host installation only:
 
 - installs Docker, Caddy, Node.js, and the local services
-- writes `/opt/agentos/.env`
-- creates `/opt/agentos/runtime/{human,goalloop,scheduled,summary}`
+- writes the AgentGLS runtime configuration
+- creates `/opt/agentgls/runtime/{human,goalloop,scheduled,summary}`
 - applies SQL migrations after PostgreSQL and PostgREST start
 - installs cron jobs for watchdog, GoalLoop, summaries, and projection sync
 - exposes the dashboard immediately on `VPS_IP:3000`
@@ -51,17 +51,17 @@ For unattended installs or recovery, environment-variable overrides remain avail
 
 ```bash
 AGENTGLS_PROVIDER=codex \
-AGENTOS_DOMAIN=example.com \
+AGENTGLS_DOMAIN=example.com \
 AGENTGLS_ADMIN_EMAIL=ops@example.com \
-AGENTOS_DASHBOARD_PASSWORD=yourpassword \
+AGENTGLS_DASHBOARD_PASSWORD=yourpassword \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/bootstrap.sh)"
 ```
 
 Only the selected provider is installed by default. To install the other provider later on the VPS:
 
 ```bash
-sudo -u agentos /opt/agentos/scripts/install-provider.sh install claude
-sudo -u agentos /opt/agentos/scripts/install-provider.sh install codex
+sudo -u agentgls /opt/agentgls/scripts/install-provider.sh install claude
+sudo -u agentgls /opt/agentgls/scripts/install-provider.sh install codex
 ```
 
 ## Provider Auth
@@ -95,19 +95,19 @@ Telegram is now provider-neutral. The runtime uses the Bot API bridge in this re
 2. Store the token during onboarding or with:
 
 ```bash
-sudo -u agentos /opt/agentos/scripts/telegram-setup.sh
+sudo -u agentgls /opt/agentgls/scripts/telegram-setup.sh
 ```
 
 3. Send a message to the bot from your operator account
-4. Approve the pairing code with `python3 /opt/agentos/scripts/telegram-bridge.py pair <CODE>`
+4. Approve the pairing code with `python3 /opt/agentgls/scripts/telegram-bridge.py pair <CODE>`
 
 Useful bridge commands:
 
 ```bash
-python3 /opt/agentos/scripts/telegram-bridge.py status
-python3 /opt/agentos/scripts/telegram-bridge.py list-pending
-python3 /opt/agentos/scripts/telegram-bridge.py list-allowed
-tail -f /opt/agentos/logs/telegram-bridge.log
+python3 /opt/agentgls/scripts/telegram-bridge.py status
+python3 /opt/agentgls/scripts/telegram-bridge.py list-pending
+python3 /opt/agentgls/scripts/telegram-bridge.py list-allowed
+tail -f /opt/agentgls/logs/telegram-bridge.log
 ```
 
 ## Operations
@@ -117,30 +117,19 @@ The runtime no longer depends on a permanently running Claude or Codex UI inside
 Useful commands:
 
 ```bash
-bash /opt/agentos/scripts/status.sh
+bash /opt/agentgls/scripts/status.sh
 tmux attach -t agent
 tmux attach -t goalloop
-tail -f /opt/agentos/logs/goalloop-heartbeat.log
-tail -f /opt/agentos/logs/goalloop-sync.log
-python3 -m unittest discover -s /opt/agentos/tests
+tail -f /opt/agentgls/logs/goalloop-heartbeat.log
+tail -f /opt/agentgls/logs/goalloop-sync.log
+python3 -m unittest discover -s /opt/agentgls/tests
 ```
 
 The `agent` tmux session is the human-facing operational shell. The `goalloop` tmux session is the autonomous GoalLoop shell where heartbeat turns are injected for operator visibility.
 
 ## Migration Note
 
-Older installs that used the Claude Telegram plugin should migrate to the Bot API bridge in this repo. The Claude plugin is no longer part of the required runtime path for AgentGLS.
-
-## Reference Repos
-
-This repo includes `Reference-Code-Repos/` with working reference implementations for:
-
-- Telegram integration:
-  - `Reference-Code-Repos/Telegram implementation referenc - AgenOS/`
-- Setup and onboarding:
-  - `Reference-Code-Repos/Setup and Onboarding implementaion reference - Paperclip/`
-
-Use them as references for how those features were implemented successfully. Do not treat them as wholesale source material for unrelated AgentGLS architecture.
+Older installs that used the Claude Telegram plugin should migrate to the Bot API bridge in this repo. That plugin is no longer part of the required AgentGLS runtime path.
 
 ## Project Notes
 

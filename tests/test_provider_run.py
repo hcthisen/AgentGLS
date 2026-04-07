@@ -87,7 +87,7 @@ fi
 
     def run_provider(self, channel: str, prompt_path: Path):
         command = (
-            f"export AGENTOS_DIR={shlex.quote(self.root_bash)}; "
+            f"export AGENTGLS_DIR={shlex.quote(self.root_bash)}; "
             f"export FAKE_PROVIDER_LOG={shlex.quote(self.provider_log_bash)}; "
             f"export PATH={shlex.quote(self.bin_dir_bash)}:\"$PATH\"; "
             f"bash {shlex.quote(self.provider_run_bash)} "

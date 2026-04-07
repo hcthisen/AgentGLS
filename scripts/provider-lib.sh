@@ -2,7 +2,7 @@
 # provider-lib.sh — shared provider helpers for AgentGLS runtime automation
 
 provider_install_dir() {
-  printf '%s\n' "${AGENTOS_DIR:-/opt/agentos}"
+  printf '%s\n' "${AGENTGLS_DIR:-/opt/agentgls}"
 }
 
 provider_env_file() {

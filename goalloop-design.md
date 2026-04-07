@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A goal-oriented execution loop for AgentGLS (formerly AgentOS-CC). A provider-neutral runtime wakes hourly, picks the single highest-priority eligible goal, works toward it through direction → production → verification → measurement, records proof, and sleeps. The runtime can be either **Claude Code** or **OpenAI Codex**, selected at install time. No multi-agent orchestration. No org chart. No delegation chains.
+A goal-oriented execution loop for AgentGLS. A provider-neutral runtime wakes hourly, picks the single highest-priority eligible goal, works toward it through direction → production → verification → measurement, records proof, and sleeps. The runtime can be either **Claude Code** or **OpenAI Codex**, selected at install time. No multi-agent orchestration. No org chart. No delegation chains.
 
 ---
 
@@ -41,31 +41,15 @@ The only required terminal action on the VPS is running the bootstrap installer.
 
 **Fallbacks**: AgentGLS remains operable without the browser for development, recovery, or unattended installs. Env-var or direct-config paths may still exist, but they are fallback/operator paths, not the primary setup UX.
 
-## Reference Implementation Repos
-
-This repo includes `Reference-Code-Repos/` with two complete software repos that should be used as feature references because those implementations are known to work:
-
-- `Reference-Code-Repos/Telegram implementation referenc - AgenOS/`
-  - Reference for **Telegram integration**.
-- `Reference-Code-Repos/Setup and Onboarding implementaion reference - Paperclip/`
-  - Reference for the **setup and onboarding experience**.
-  - This is the preferred example for how AgentGLS onboarding should behave.
-
-These repos are for reference only:
-
-- Use them to understand how Telegram integration and onboarding were implemented successfully.
-- Do not treat them as wholesale source material for unrelated architecture or product behavior.
-- Do not use unrelated code from those repos as implementation scope for AgentGLS.
-
 ### Generated Files
 
 Onboarding produces:
 
-**`/opt/agentos/goals/_context.md`** — business context. Claude/Codex reads this on every heartbeat. Editable via Telegram or directly on disk.
+**`/opt/agentgls/goals/_context.md`** — business context. Claude/Codex reads this on every heartbeat. Editable via Telegram or directly on disk.
 
-**`/opt/agentos/goals/active/<first-goal>.md`** — first goal file with `brief_status: draft`. User must confirm before the heartbeat will pick it up.
+**`/opt/agentgls/goals/active/<first-goal>.md`** — first goal file with `brief_status: draft`. User must confirm before the heartbeat will pick it up.
 
-**`/opt/agentos/goals/_runbook.md`** — created empty. Accumulates cross-goal learnings as the system operates.
+**`/opt/agentgls/goals/_runbook.md`** — created empty. Accumulates cross-goal learnings as the system operates.
 
 ---
 
@@ -94,7 +78,7 @@ Onboarding produces:
 │  │ provider-run.sh   │    │ provider-run.sh        │             │
 │  └───────────────────┘    └───────────────────────┘             │
 │                                     ▲                           │
-│  /opt/agentos/goals/                │ heartbeat claims          │
+│  /opt/agentgls/goals/                │ heartbeat claims          │
 │  ├── _context.md                    │ one eligible goal         │
 │  ├── _runbook.md                    │                           │
 │  ├── active/*.md  ◄─────────────────┘                          │
@@ -104,7 +88,7 @@ Onboarding produces:
 │  ├── proof/<goal-slug>/...                                     │
 │  └── locks/*.lock                                              │
 │                                                                 │
-│  /opt/agentos/runtime/           Provider session continuity    │
+│  /opt/agentgls/runtime/           Provider session continuity    │
 │  ├── human/                      (isolated per channel)         │
 │  ├── goalloop/                                                  │
 │  ├── scheduled/                                                 │
@@ -127,12 +111,12 @@ AgentGLS does not keep a permanently running provider REPL in tmux. Instead, aut
 
 | Channel | Working dir | Purpose |
 |---|---|---|
-| `human` | `/opt/agentos/runtime/human/` | Telegram conversations |
-| `goalloop` | `/opt/agentos/runtime/goalloop/` | Autonomous goal execution |
-| `scheduled` | `/opt/agentos/runtime/scheduled/` | Scheduled tasks |
-| `summary` | `/opt/agentos/runtime/summary/` | Daily summaries |
+| `human` | `/opt/agentgls/runtime/human/` | Telegram conversations |
+| `goalloop` | `/opt/agentgls/runtime/goalloop/` | Autonomous goal execution |
+| `scheduled` | `/opt/agentgls/runtime/scheduled/` | Scheduled tasks |
+| `summary` | `/opt/agentgls/runtime/summary/` | Daily summaries |
 
-Each channel gets isolated session continuity. Both providers discover instruction files (`AGENTS.md` / `CLAUDE.md`) by walking the project tree from cwd, so keeping working dirs inside `/opt/agentos` ensures they load the correct instructions.
+Each channel gets isolated session continuity. Both providers discover instruction files (`AGENTS.md` / `CLAUDE.md`) by walking the project tree from cwd, so keeping working dirs inside `/opt/agentgls` ensures they load the correct instructions.
 
 Provider commands:
 
@@ -162,8 +146,8 @@ Operators can `tmux attach -t agent` or `tmux attach -t goalloop` to observe. Th
 ```
 
 On the deployed VPS:
-- `/opt/agentos/AGENTS.md` — canonical operational protocol (GoalLoop, Telegram commands, verification rules)
-- `/opt/agentos/CLAUDE.md` — thin shim importing `@AGENTS.md`
+- `/opt/agentgls/AGENTS.md` — canonical operational protocol (GoalLoop, Telegram commands, verification rules)
+- `/opt/agentgls/CLAUDE.md` — thin shim importing `@AGENTS.md`
 
 ### Why Not Build On tasks.sh
 
@@ -175,7 +159,7 @@ Telegram is decoupled from the provider runtime. No Claude plugin dependency.
 
 **`telegram-bridge.py`** long-polls the Telegram Bot API, handles pairing/allowlist, and routes inbound messages through `provider-run.sh human <prompt_file>`. Replies go back via `send-telegram.sh`. Works identically with Claude or Codex selected.
 
-**`send-telegram.sh`** reads `TELEGRAM_BOT_TOKEN` from `/opt/agentos/.env`, sends text to a target `chat_id`, chunks messages for Telegram limits.
+**`send-telegram.sh`** reads `TELEGRAM_BOT_TOKEN` from `/opt/agentgls/.env`, sends text to a target `chat_id`, chunks messages for Telegram limits.
 
 ---
 
@@ -722,13 +706,13 @@ The heartbeat claims one goal via `goalmeta.py`, builds a prompt, and executes i
 
 ```bash
 #!/bin/bash
-# /opt/agentos/scripts/goalloop-heartbeat.sh
+# /opt/agentgls/scripts/goalloop-heartbeat.sh
 # Cron: 0 * * * *
 
-GOALS_DIR="/opt/agentos/goals"
+GOALS_DIR="/opt/agentgls/goals"
 ACTIVE_DIR="$GOALS_DIR/active"
-SCRIPTS_DIR="/opt/agentos/scripts"
-LOG="/opt/agentos/logs/goalloop.log"
+SCRIPTS_DIR="/opt/agentgls/scripts"
+LOG="/opt/agentgls/logs/goalloop.log"
 NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 source "$SCRIPTS_DIR/provider-lib.sh"
@@ -802,7 +786,7 @@ log "Heartbeat injected for: $BEST_SLUG"
 
 ## AGENTS.md — Canonical Operational Protocol
 
-This is the canonical instruction file, read by Codex natively and imported by Claude via `CLAUDE.md`. Lives at `/opt/agentos/AGENTS.md` on the deployed VPS.
+This is the canonical instruction file, read by Codex natively and imported by Claude via `CLAUDE.md`. Lives at `/opt/agentgls/AGENTS.md` on the deployed VPS.
 
 The GoalLoop protocol section:
 
@@ -810,11 +794,11 @@ The GoalLoop protocol section:
 ## GoalLoop Execution Protocol
 
 You operate a GoalLoop system. Goals are markdown files with YAML front matter
-in /opt/agentos/goals/. All front-matter operations go through goalmeta.py.
+in /opt/agentgls/goals/. All front-matter operations go through goalmeta.py.
 
 ### Directory Layout
 
-/opt/agentos/goals/
+/opt/agentgls/goals/
 ├── _context.md          # Business context (generated at onboarding)
 ├── _runbook.md          # Cross-goal learnings
 ├── active/              # Goals eligible for execution
@@ -827,11 +811,11 @@ in /opt/agentos/goals/. All front-matter operations go through goalmeta.py.
 ### Goal File Operations
 
 Use goalmeta.py for all front-matter operations:
-  python3 /opt/agentos/scripts/goalmeta.py get <file> <field>
-  python3 /opt/agentos/scripts/goalmeta.py set <file> <field> <value>
-  python3 /opt/agentos/scripts/goalmeta.py finalize <file>
-  python3 /opt/agentos/scripts/goalmeta.py complete <file> /opt/agentos/goals/completed
-  python3 /opt/agentos/scripts/goalmeta.py pause <file> /opt/agentos/goals/paused
+  python3 /opt/agentgls/scripts/goalmeta.py get <file> <field>
+  python3 /opt/agentgls/scripts/goalmeta.py set <file> <field> <value>
+  python3 /opt/agentgls/scripts/goalmeta.py finalize <file>
+  python3 /opt/agentgls/scripts/goalmeta.py complete <file> /opt/agentgls/goals/completed
+  python3 /opt/agentgls/scripts/goalmeta.py pause <file> /opt/agentgls/goals/paused
 
 You may read and edit the markdown body (below the second ---) directly.
 
@@ -859,7 +843,7 @@ Check which finish criteria are incomplete. Decide the next action.
 
 **2. Production**
 Do the work. Before mutating shared external surfaces, acquire a lock:
-  flock -n /opt/agentos/goals/locks/<resource>.lock -c "<command>"
+  flock -n /opt/agentgls/goals/locks/<resource>.lock -c "<command>"
 If held, log as blocked and pause.
 
 **3. Verification (NON-NEGOTIABLE)**
@@ -886,7 +870,7 @@ Always run one before stopping. Never leave run_state as "running".
 
 **6. Blocked Goals**
 Log the blocker. Notify via send-telegram.sh:
-  bash /opt/agentos/scripts/send-telegram.sh <chat_id> "🔴 Goal blocked: <slug> — <reason>"
+  bash /opt/agentgls/scripts/send-telegram.sh <chat_id> "🔴 Goal blocked: <slug> — <reason>"
 Then pause.
 
 ### Finish Criteria Rules
@@ -946,22 +930,22 @@ Use flock -n. If held, log and pause.
 Provider-neutral. Ensures tmux shell sessions exist, not provider REPLs:
 
 ```bash
-# In /opt/agentos/scripts/watchdog.sh
+# In /opt/agentgls/scripts/watchdog.sh
 
 for SESSION in agent goalloop; do
     if ! tmux has-session -t "$SESSION" 2>/dev/null; then
         echo "[$(date)] $SESSION session dead. Restarting..." \
-            >> /opt/agentos/logs/watchdog.log
-        tmux new-session -d -s "$SESSION" -c /opt/agentos
+            >> /opt/agentgls/logs/watchdog.log
+        tmux new-session -d -s "$SESSION" -c /opt/agentgls
     fi
 done
 
 # Check telegram-bridge process
 if ! pgrep -f "telegram-bridge.py" > /dev/null 2>&1; then
     echo "[$(date)] Telegram bridge dead. Restarting..." \
-        >> /opt/agentos/logs/watchdog.log
-    nohup python3 /opt/agentos/scripts/telegram-bridge.py \
-        >> /opt/agentos/logs/telegram-bridge.log 2>&1 &
+        >> /opt/agentgls/logs/watchdog.log
+    nohup python3 /opt/agentgls/scripts/telegram-bridge.py \
+        >> /opt/agentgls/logs/telegram-bridge.log 2>&1 &
 fi
 ```
 
@@ -1005,14 +989,14 @@ Migration number is `006` (repo already has `000`–`005`). Wire into `run-migra
 
 ```bash
 #!/bin/bash
-# /opt/agentos/scripts/goalloop-sync.sh
+# /opt/agentgls/scripts/goalloop-sync.sh
 # Cron: */30 * * * *
 
 set -euo pipefail
-source /opt/agentos/.env
+source /opt/agentgls/.env
 
-GOALS_DIR="/opt/agentos/goals"
-SCRIPTS_DIR="/opt/agentos/scripts"
+GOALS_DIR="/opt/agentgls/goals"
+SCRIPTS_DIR="/opt/agentgls/scripts"
 API="http://localhost:3001"
 AUTH="Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
 NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -1109,7 +1093,7 @@ sync_dir "$GOALS_DIR/completed" "completed"
 `flock` on files in `goals/locks/`. Implements resource leases without a database.
 
 ```bash
-flock -n /opt/agentos/goals/locks/wordpress_prod_example.com.lock -c \
+flock -n /opt/agentgls/goals/locks/wordpress_prod_example.com.lock -c \
     "wp post update 42 --post_content='...'"
 # Exit 1 if held → log and pause
 ```
