@@ -26,15 +26,31 @@ function compact(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function authCommandFor(provider, adminEmail = '') {
+function providerApiKeyState(env, provider) {
   if (provider === 'claude') {
-    const emailFlag = adminEmail ? ` --email ${adminEmail}` : ''
-    return `claude auth login --claudeai${emailFlag}`
+    return {
+      configured: Boolean(env.ANTHROPIC_API_KEY),
+      envVar: 'ANTHROPIC_API_KEY',
+      masked: maskToken(env.ANTHROPIC_API_KEY || ''),
+      label: 'Anthropic API key',
+    }
   }
+
   if (provider === 'codex') {
-    return 'codex login --device-auth'
+    return {
+      configured: Boolean(env.OPENAI_API_KEY),
+      envVar: 'OPENAI_API_KEY',
+      masked: maskToken(env.OPENAI_API_KEY || ''),
+      label: 'OpenAI API key',
+    }
   }
-  return ''
+
+  return {
+    configured: false,
+    envVar: '',
+    masked: '',
+    label: 'API key',
+  }
 }
 
 export async function getSetupState() {
@@ -52,8 +68,10 @@ export async function getSetupState() {
       authenticated: false,
       installStatus: 'pending',
       authStatus: 'pending',
-      authCommand: '',
-      manualInstallCommand: '',
+      apiKeyConfigured: false,
+      maskedApiKey: '',
+      authEnvVar: '',
+      authInputLabel: '',
     },
     domain: {
       value: env.AGENTGLS_DOMAIN || '',
@@ -89,11 +107,11 @@ export async function getSetupState() {
   state.telegram.operational = state.telegram.skipped
 
   if (state.provider.selected) {
-    state.provider.authCommand = authCommandFor(state.provider.selected, state.adminEmail)
-    state.provider.manualInstallCommand =
-      state.provider.selected === 'claude'
-        ? 'curl -fsSL https://claude.ai/install.sh | bash'
-        : 'npm install -g @openai/codex'
+    const apiKeyState = providerApiKeyState(env, state.provider.selected)
+    state.provider.apiKeyConfigured = apiKeyState.configured
+    state.provider.maskedApiKey = apiKeyState.masked
+    state.provider.authEnvVar = apiKeyState.envVar
+    state.provider.authInputLabel = apiKeyState.label
 
     try {
       const installResult = await runProviderScript('status', state.provider.selected)

@@ -32,6 +32,8 @@ ENV_ORDER = [
     "AGENTGLS_ADMIN_EMAIL",
     "AGENTGLS_DOMAIN_SKIPPED",
     "AGENTGLS_TELEGRAM_SKIPPED",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
     "TELEGRAM_BOT_TOKEN",
     "POSTGRES_PASSWORD",
     "JWT_SECRET",
@@ -155,6 +157,22 @@ def set_provider() -> None:
 
     env = load_env()
     env["AGENTGLS_PROVIDER"] = provider
+    write_env(env)
+
+
+def set_provider_auth() -> None:
+    data = read_json_stdin()
+    provider = str(data.get("provider", "")).strip()
+    api_key = str(data.get("api_key", "")).strip()
+
+    if provider not in {"claude", "codex"}:
+        raise SystemExit("provider must be claude or codex")
+
+    env = load_env()
+    if provider == "claude":
+        env["ANTHROPIC_API_KEY"] = api_key
+    else:
+        env["OPENAI_API_KEY"] = api_key
     write_env(env)
 
 
@@ -297,6 +315,7 @@ def main() -> None:
         choices=[
             "set-admin",
             "set-provider",
+            "set-provider-auth",
             "set-domain",
             "set-telegram",
             "write-context",
@@ -312,6 +331,7 @@ def main() -> None:
     actions = {
         "set-admin": set_admin,
         "set-provider": set_provider,
+        "set-provider-auth": set_provider_auth,
         "set-domain": set_domain,
         "set-telegram": set_telegram,
         "write-context": write_context,

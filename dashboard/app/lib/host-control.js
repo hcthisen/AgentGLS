@@ -83,6 +83,10 @@ export function runProviderScript(subcommand, provider) {
   return runHostCommand(command, { allowFailure: subcommand !== 'install' })
 }
 
+export function probeProviderScript(provider) {
+  return runProviderScript('probe', provider)
+}
+
 export async function getTelegramBridgeState() {
   const result = await runHostCommand(
     `python3 ${shellQuote(TELEGRAM_BRIDGE_PATH)} inspect`,

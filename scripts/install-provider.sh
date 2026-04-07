@@ -49,6 +49,20 @@ provider_bin() {
   esac
 }
 
+provider_api_key_var() {
+  case "$1" in
+    claude) echo "ANTHROPIC_API_KEY" ;;
+    codex) echo "OPENAI_API_KEY" ;;
+    *) return 1 ;;
+  esac
+}
+
+provider_api_key_present() {
+  local key_var
+  key_var="$(provider_api_key_var "$1")"
+  [[ -n "${!key_var:-}" ]]
+}
+
 is_installed() {
   command -v "$(provider_bin "$1")" >/dev/null 2>&1
 }
@@ -89,6 +103,11 @@ print_auth_status() {
     return 1
   fi
 
+  if provider_api_key_present "$provider"; then
+    echo "api key configured"
+    return 0
+  fi
+
   case "$provider" in
     claude)
       claude auth status
@@ -99,12 +118,31 @@ print_auth_status() {
   esac
 }
 
+probe_provider() {
+  local provider="$1"
+
+  if ! is_installed "$provider"; then
+    echo "missing"
+    return 1
+  fi
+
+  case "$provider" in
+    claude)
+      timeout 45s claude -p "Respond with hello."
+      ;;
+    codex)
+      timeout 45s codex exec "Respond with hello."
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
   install-provider.sh install [claude|codex]
   install-provider.sh status [claude|codex]
   install-provider.sh auth-status [claude|codex]
+  install-provider.sh probe [claude|codex]
 
 If no provider argument is provided, AGENTGLS_PROVIDER from /opt/agentgls/.env is used.
 EOF
@@ -135,6 +173,10 @@ main() {
     auth-status)
       provider_arg="$(resolve_provider "$provider_arg")"
       print_auth_status "$provider_arg"
+      ;;
+    probe)
+      provider_arg="$(resolve_provider "$provider_arg")"
+      probe_provider "$provider_arg"
       ;;
     *)
       usage

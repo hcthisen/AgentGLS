@@ -24,6 +24,8 @@ OVERRIDE_AGENTGLS_PROVIDER="${AGENTGLS_PROVIDER:-}"
 OVERRIDE_ADMIN_NAME="${AGENTGLS_ADMIN_NAME:-}"
 OVERRIDE_ADMIN_EMAIL="${AGENTGLS_ADMIN_EMAIL:-}"
 OVERRIDE_DASHBOARD_PASSWORD="${AGENTGLS_DASHBOARD_PASSWORD:-}"
+OVERRIDE_ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+OVERRIDE_OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OVERRIDE_TELEGRAM_TOKEN="${TELEGRAM_BOT_TOKEN:-${AGENTGLS_TELEGRAM_TOKEN:-}}"
 
 check_root() {
@@ -188,6 +190,8 @@ prepare_config() {
   AGENTGLS_PROVIDER="${OVERRIDE_AGENTGLS_PROVIDER:-${AGENTGLS_PROVIDER:-}}"
   AGENTGLS_ADMIN_NAME="${OVERRIDE_ADMIN_NAME:-${AGENTGLS_ADMIN_NAME:-}}"
   AGENTGLS_ADMIN_EMAIL="${OVERRIDE_ADMIN_EMAIL:-${AGENTGLS_ADMIN_EMAIL:-}}"
+  ANTHROPIC_API_KEY="${OVERRIDE_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+  OPENAI_API_KEY="${OVERRIDE_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
   TELEGRAM_BOT_TOKEN="${OVERRIDE_TELEGRAM_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
   AGENTGLS_DOMAIN_SKIPPED="${AGENTGLS_DOMAIN_SKIPPED:-0}"
   AGENTGLS_TELEGRAM_SKIPPED="${AGENTGLS_TELEGRAM_SKIPPED:-0}"
@@ -217,6 +221,8 @@ AGENTGLS_ADMIN_NAME="${admin_name_escaped}"
 AGENTGLS_ADMIN_EMAIL=${AGENTGLS_ADMIN_EMAIL}
 AGENTGLS_DOMAIN_SKIPPED=${AGENTGLS_DOMAIN_SKIPPED}
 AGENTGLS_TELEGRAM_SKIPPED=${AGENTGLS_TELEGRAM_SKIPPED}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+OPENAI_API_KEY=${OPENAI_API_KEY}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 JWT_SECRET=${JWT_SECRET}
@@ -403,15 +409,15 @@ EOF
   success "Caddy configured"
 }
 
-install_provider_if_selected() {
-  if [[ -z "${AGENTGLS_PROVIDER:-}" ]]; then
-    info "No provider selected during bootstrap; onboarding will install the chosen provider later"
-    return
-  fi
+install_provider_tooling() {
+  local provider
 
-  step "Installing selected provider: ${AGENTGLS_PROVIDER}"
-  sudo -u "$AGENTGLS_USER" bash -lc "cd '$INSTALL_DIR' && '$INSTALL_DIR/scripts/install-provider.sh' install '$AGENTGLS_PROVIDER'"
-  success "Provider installation finished"
+  step "Installing provider CLIs..."
+  for provider in claude codex; do
+    info "Installing provider CLI: ${provider}"
+    sudo -u "$AGENTGLS_USER" bash -lc "cd '$INSTALL_DIR' && '$INSTALL_DIR/scripts/install-provider.sh' install '$provider'"
+  done
+  success "Claude Code and Codex CLI installed"
 }
 
 install_crontab() {
@@ -506,7 +512,7 @@ main() {
   run_database_migrations
   build_dashboard
   configure_caddy_if_requested
-  install_provider_if_selected
+  install_provider_tooling
   install_crontab
   restore_scheduled_task_cron
   run_initial_sync

@@ -34,7 +34,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/b
 
 Bootstrap now does the host installation only:
 
-- installs Docker, Caddy, Node.js, and the local services
+- installs Docker, Caddy, Node.js, Claude Code, Codex CLI, and the local services
 - writes the AgentGLS runtime configuration
 - creates `/opt/agentgls/runtime/{human,goalloop,scheduled,summary}`
 - applies SQL migrations after PostgreSQL and PostgREST start
@@ -57,7 +57,7 @@ AGENTGLS_DASHBOARD_PASSWORD=yourpassword \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/bootstrap.sh)"
 ```
 
-Only the selected provider is installed by default. To install the other provider later on the VPS:
+Bootstrap installs both provider CLIs up front. If you ever need to rerun either install manually on the VPS:
 
 ```bash
 sudo -u agentgls /opt/agentgls/scripts/install-provider.sh install claude
@@ -71,7 +71,7 @@ AgentGLS supports one active runtime at a time:
 - `claude`
 - `codex`
 
-The onboarding flow installs the selected CLI, then guides auth through the web terminal.
+Bootstrap installs both CLIs, and onboarding chooses the active runtime and guides auth through the web terminal.
 
 ### Claude Code
 

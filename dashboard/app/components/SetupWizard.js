@@ -1,8 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import TerminalTab from './TerminalTab'
 
-const STEP_ORDER = ['admin', 'provider', 'auth', 'domain', 'telegram', 'context', 'launch']
+const STEP_ORDER = ['admin', 'provider', 'domain', 'telegram', 'context', 'launch']
 
 const STEP_META = {
   admin: {
@@ -12,13 +11,8 @@ const STEP_META = {
   },
   provider: {
     label: 'Runtime',
-    title: 'Choose the active provider',
-    blurb: 'Install the runtime you want this host to use for human turns, GoalLoop, and scheduled jobs.',
-  },
-  auth: {
-    label: 'Auth',
-    title: 'Complete provider authentication',
-    blurb: 'Run the provider login once in the embedded terminal, then refresh status here.',
+    title: 'Choose and authorize the active provider',
+    blurb: 'Bootstrap installs both CLIs. Choose the active runtime, optionally add its API key, and run a live check from the browser.',
   },
   domain: {
     label: 'Domain',
@@ -49,9 +43,7 @@ function stepIsSatisfied(stepId, setupState) {
     case 'admin':
       return Boolean(setupState.adminConfigured)
     case 'provider':
-      return Boolean(setupState.provider?.selected && setupState.provider?.installed)
-    case 'auth':
-      return Boolean(setupState.provider?.authenticated)
+      return Boolean(setupState.provider?.selected && setupState.provider?.installed && setupState.provider?.authenticated)
     case 'domain':
       return Boolean(setupState.domain?.done)
     case 'telegram':
@@ -67,8 +59,7 @@ function stepIsSatisfied(stepId, setupState) {
 
 function deriveCurrentStep(setupState) {
   if (!setupState?.adminConfigured) return 'admin'
-  if (!(setupState.provider?.selected && setupState.provider?.installed)) return 'provider'
-  if (!setupState.provider?.authenticated) return 'auth'
+  if (!(setupState.provider?.selected && setupState.provider?.installed && setupState.provider?.authenticated)) return 'provider'
   if (!setupState.domain?.done) return 'domain'
   if (!setupState.telegram?.operational) return 'telegram'
   if (!setupState.context?.configured) return 'context'
@@ -88,10 +79,7 @@ function buildSteps(setupState) {
       status = tone === 'skipped' ? 'skipped' : 'done'
     } else if (id === 'provider' && setupState?.provider?.selected) {
       tone = 'active'
-      status = 'installing'
-    } else if (id === 'auth' && setupState?.provider?.selected) {
-      tone = 'active'
-      status = 'waiting'
+      status = setupState?.provider?.authenticated ? 'ready' : 'auth needed'
     } else if (id === 'telegram' && setupState?.telegram?.configured) {
       tone = 'active'
       status = setupState.telegram.bridgeRunning ? 'running' : 'start bridge'
@@ -115,6 +103,27 @@ function formatTimestamp(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+function providerAuthMeta(provider) {
+  if (provider === 'claude') {
+    return {
+      envVar: 'ANTHROPIC_API_KEY',
+      label: 'Anthropic API key',
+    }
+  }
+
+  if (provider === 'codex') {
+    return {
+      envVar: 'OPENAI_API_KEY',
+      label: 'OpenAI API key',
+    }
+  }
+
+  return {
+    envVar: '',
+    label: 'Provider API key',
+  }
 }
 
 function StepRail({ steps, currentStep, unlockedIndex, onSelect }) {
@@ -212,6 +221,42 @@ function AllowlistList({ entries }) {
   )
 }
 
+function ProviderProbeResult({ result }) {
+  if (!result) return null
+
+  const statusClass =
+    result.status === 'pass'
+      ? 'ok'
+      : result.status === 'warn'
+        ? 'warn'
+        : 'error'
+
+  return (
+    <div className={`setup-banner ${statusClass}`}>
+      <div className="setup-check-header">
+        <strong>
+          {result.status === 'pass'
+            ? 'Live check passed'
+            : result.status === 'warn'
+              ? 'Live check needs attention'
+              : 'Live check failed'}
+        </strong>
+        <span>{formatTimestamp(result.testedAt)}</span>
+      </div>
+      <div className="setup-check-list">
+        {(result.checks || []).map((check, index) => (
+          <div key={`${check.code || 'check'}-${index}`} className="setup-check-item">
+            <span className={`setup-check-level ${check.level}`}>{check.level}</span>
+            <span>{check.message}</span>
+            {check.detail && <div className="setup-check-detail">{check.detail}</div>}
+            {check.hint && <div className="setup-check-hint">Hint: {check.hint}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SetupWizard({
   setupState,
   authenticated,
@@ -222,6 +267,9 @@ export default function SetupWizard({
   const [adminEmail, setAdminEmail] = useState(setupState?.adminEmail || '')
   const [adminPassword, setAdminPassword] = useState('')
   const [provider, setProvider] = useState(setupState?.provider?.selected || 'claude')
+  const [providerDirty, setProviderDirty] = useState(false)
+  const [providerApiKey, setProviderApiKey] = useState('')
+  const [providerProbe, setProviderProbe] = useState(null)
   const [domain, setDomain] = useState(setupState?.domain?.value || '')
   const [domainResult, setDomainResult] = useState(null)
   const [telegramToken, setTelegramToken] = useState('')
@@ -237,17 +285,35 @@ export default function SetupWizard({
   useEffect(() => {
     setAdminName(setupState?.adminName || '')
     setAdminEmail(setupState?.adminEmail || '')
-    setProvider(setupState?.provider?.selected || 'claude')
+    if (!providerDirty) {
+      setProvider(setupState?.provider?.selected || 'claude')
+    }
     setDomain(setupState?.domain?.value || '')
     setBusinessContext(setupState?.context?.text || '')
-    setCurrentStep(deriveCurrentStep(setupState))
-  }, [setupState])
+  }, [providerDirty, setupState])
+
+  useEffect(() => {
+    setProviderProbe(null)
+    setProviderApiKey('')
+  }, [provider])
 
   const steps = buildSteps(setupState)
   const completedCount = steps.filter((step) => step.complete).length
   const currentIndex = Math.max(STEP_ORDER.indexOf(currentStep), 0)
   const unlockedIndex = Math.max(STEP_ORDER.indexOf(deriveCurrentStep(setupState)), 0)
   const currentMeta = STEP_META[currentStep]
+  const savedProvider = setupState?.provider?.selected || ''
+  const providerSaved = provider === savedProvider
+  const currentProviderMeta = providerAuthMeta(provider)
+  const providerApiKeyConfigured = providerSaved && Boolean(setupState?.provider?.apiKeyConfigured)
+  const providerInstallStatus = providerSaved
+    ? setupState?.provider?.installStatus || 'pending'
+    : savedProvider
+      ? `active provider is ${savedProvider}; save to switch`
+      : 'save this provider to continue'
+  const providerAuthStatus = providerSaved
+    ? setupState?.provider?.authStatus || 'pending'
+    : 'save this provider to unlock browser-based authorization'
 
   async function refreshSetupState(notify = false) {
     setBusyAction('refresh_setup')
@@ -293,12 +359,18 @@ export default function SetupWizard({
       if (action === 'set_admin') {
         onAuthenticated(true)
       }
+      if (action === 'set_provider') {
+        setProviderDirty(false)
+      }
 
       if (options.clearDomainResult) {
         setDomainResult(null)
       }
       if (options.clearAdminPassword) {
         setAdminPassword('')
+      }
+      if (options.clearProviderApiKey) {
+        setProviderApiKey('')
       }
       if (options.clearTelegramToken) {
         setTelegramToken('')
@@ -317,6 +389,33 @@ export default function SetupWizard({
       return data
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Setup action failed')
+      return null
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function runProviderCheck(providerToCheck = provider) {
+    setBusyAction('probe_provider')
+    setError('')
+    setMessage('')
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'probe_provider', provider: providerToCheck }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Provider live check failed')
+      }
+      onSetupUpdate(data)
+      setProviderProbe(data.providerProbe || null)
+      setMessage('Provider live check completed')
+      return data
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Provider live check failed')
       return null
     } finally {
       setBusyAction('')
@@ -379,7 +478,6 @@ export default function SetupWizard({
   const previousStepsComplete =
     stepIsSatisfied('admin', setupState) &&
     stepIsSatisfied('provider', setupState) &&
-    stepIsSatisfied('auth', setupState) &&
     stepIsSatisfied('domain', setupState) &&
     stepIsSatisfied('telegram', setupState) &&
     stepIsSatisfied('context', setupState)
@@ -538,7 +636,10 @@ export default function SetupWizard({
                     <input
                       type="radio"
                       checked={provider === 'claude'}
-                      onChange={() => setProvider('claude')}
+                      onChange={() => {
+                        setProviderDirty(true)
+                        setProvider('claude')
+                      }}
                     />
                     <span>Claude Code</span>
                   </label>
@@ -546,25 +647,52 @@ export default function SetupWizard({
                     <input
                       type="radio"
                       checked={provider === 'codex'}
-                      onChange={() => setProvider('codex')}
+                      onChange={() => {
+                        setProviderDirty(true)
+                        setProvider('codex')
+                      }}
                     />
                     <span>OpenAI Codex</span>
                   </label>
                 </div>
                 <div className="setup-detail">
                   <div>
-                    Selected provider: <code>{setupState?.provider?.selected || provider}</code>
+                    Chosen provider: <code>{provider}</code>
                   </div>
                   <div>
-                    Install status: <code>{setupState?.provider?.installStatus || 'pending'}</code>
+                    Active provider: <code>{savedProvider || 'not saved yet'}</code>
                   </div>
                   <div>
-                    Auth status: <code>{setupState?.provider?.authStatus || 'pending'}</code>
+                    Install status: <code>{providerInstallStatus}</code>
                   </div>
                   <div>
-                    Manual install fallback:{' '}
-                    <code>{setupState?.provider?.manualInstallCommand || 'n/a'}</code>
+                    Auth status: <code>{providerAuthStatus}</code>
                   </div>
+                  <div>
+                    Auth input: <code>{currentProviderMeta.envVar || 'select a provider first'}</code>
+                  </div>
+                </div>
+                {!providerSaved && (
+                  <div className="setup-banner warn">
+                    Save this provider as active first. Then the browser-based auth field and live check will target it.
+                  </div>
+                )}
+                <input
+                  type="password"
+                  disabled={!providerSaved}
+                  placeholder={
+                    providerApiKeyConfigured
+                      ? `${setupState.provider.authInputLabel} configured: ${setupState.provider.maskedApiKey}`
+                      : currentProviderMeta.label
+                  }
+                  value={providerApiKey}
+                  onChange={(event) => setProviderApiKey(event.target.value)}
+                />
+                <div className="setup-copy">
+                  This follows the Paperclip pattern: save the active provider, authorize it here from the browser with an API key, and verify it with a live hello probe.
+                </div>
+                <div className="setup-copy">
+                  The onboarding flow does not need an embedded terminal for provider authorization. If you later use CLI login on the host, come back here and rerun the live check.
                 </div>
                 <div className="form-actions">
                   <button
@@ -575,50 +703,51 @@ export default function SetupWizard({
                       executeSetupAction(
                         'set_provider',
                         { provider },
-                        { successMessage: `${provider} selected and installation triggered` }
+                        { successMessage: `${provider} saved as the active provider` }
                       )
                     }
                   >
-                    {busyAction === 'set_provider' ? 'installing...' : 'save + install provider'}
+                    {busyAction === 'set_provider' ? 'saving...' : 'save active provider'}
                   </button>
-                </div>
-              </>
-            )}
-
-            {currentStep === 'auth' && (
-              <>
-                <div className="setup-detail">
-                  <div>
-                    Login command:{' '}
-                    <code>{setupState?.provider?.authCommand || 'choose a provider first'}</code>
-                  </div>
-                  <div>
-                    Provider installed: <code>{setupState?.provider?.installed ? 'yes' : 'no'}</code>
-                  </div>
-                  <div>
-                    Provider authenticated:{' '}
-                    <code>{setupState?.provider?.authenticated ? 'yes' : 'no'}</code>
-                  </div>
-                </div>
-                <div className="setup-copy">
-                  Run the login command in the terminal below. Complete the browser or device flow,
-                  then refresh this step.
-                </div>
-                <div className="form-actions">
                   <button
                     type="button"
                     className="btn-sm"
-                    disabled={busyAction === 'refresh_setup'}
-                    onClick={() => refreshSetupState(true)}
+                    disabled={
+                      busyAction === 'set_provider_auth' ||
+                      !providerSaved ||
+                      (!providerApiKey.trim() && !providerApiKeyConfigured)
+                    }
+                    onClick={() =>
+                      executeSetupAction(
+                        'set_provider_auth',
+                        { provider, apiKey: providerApiKey },
+                        {
+                          clearProviderApiKey: true,
+                          successMessage: providerApiKey
+                            ? `${currentProviderMeta.label} saved`
+                            : 'Provider API key cleared',
+                        }
+                      )
+                    }
                   >
-                    {busyAction === 'refresh_setup' ? 'refreshing...' : 'refresh status'}
+                    {busyAction === 'set_provider_auth'
+                      ? 'saving key...'
+                      : providerApiKey
+                        ? 'save API key'
+                        : providerApiKeyConfigured
+                          ? 'clear saved key'
+                          : 'save API key'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    disabled={busyAction === 'probe_provider' || !providerSaved}
+                    onClick={() => runProviderCheck(provider)}
+                  >
+                    {busyAction === 'probe_provider' ? 'checking...' : 'run live check'}
                   </button>
                 </div>
-                {setupState?.adminConfigured && (
-                  <div className="embedded-terminal">
-                    <TerminalTab />
-                  </div>
-                )}
+                <ProviderProbeResult result={providerProbe} />
               </>
             )}
 

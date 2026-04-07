@@ -5,6 +5,7 @@ import { buildSessionToken, requireSetupAccess, sessionCookieOptions } from '../
 import {
   approveTelegramPair,
   configureCaddy,
+  probeProviderScript,
   runProviderScript,
   runSetupAction,
   startTelegramBridge,
@@ -18,6 +19,83 @@ function unauthorized() {
 
 function invalid(message) {
   return NextResponse.json({ error: message }, { status: 400 })
+}
+
+function compact(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function buildProviderProbe(provider, result, installed) {
+  const stdout = String(result?.stdout || '').trim()
+  const stderr = String(result?.stderr || '').trim()
+  const detail = compact(stderr || stdout)
+  const combined = `${stdout}\n${stderr}`.trim()
+  const authHint =
+    provider === 'claude'
+      ? 'Paste an Anthropic API key above or complete Claude CLI login on the host, then check again.'
+      : 'Paste an OpenAI API key above or complete Codex CLI login on the host, then check again.'
+
+  const checks = [
+    {
+      code: `${provider}_command_resolvable`,
+      level: installed ? 'info' : 'error',
+      message: installed
+        ? `${provider} CLI is installed`
+        : `${provider} CLI is not installed`,
+    },
+  ]
+
+  if ((result?.code ?? 1) === 0) {
+    checks.push({
+      code: `${provider}_hello_probe_passed`,
+      level: 'info',
+      message: `${provider} live check succeeded.`,
+      detail: detail || 'Provider returned a successful response.',
+    })
+    return {
+      adapterType: provider,
+      status: 'pass',
+      checks,
+      testedAt: new Date().toISOString(),
+    }
+  }
+
+  if ((result?.code ?? 1) === 124) {
+    checks.push({
+      code: `${provider}_hello_probe_timed_out`,
+      level: 'warn',
+      message: `${provider} live check timed out.`,
+      hint: 'Retry the check. If this keeps timing out, verify the CLI can answer a simple prompt from the host shell.',
+    })
+    return {
+      adapterType: provider,
+      status: 'warn',
+      checks,
+      testedAt: new Date().toISOString(),
+    }
+  }
+
+  const authRequired =
+    provider === 'claude'
+      ? /(?:auth|login|sign\s*in|subscription|anthropic[_\s-]?api[_\s-]?key|unauthorized|invalid credentials)/i.test(combined)
+      : /(?:auth|login|openai[_\s-]?api[_\s-]?key|api[_\s-]?key|required|not\s+logged\s+in|unauthorized|invalid credentials)/i.test(combined)
+
+  checks.push({
+    code: authRequired ? `${provider}_hello_probe_auth_required` : `${provider}_hello_probe_failed`,
+    level: authRequired ? 'warn' : 'error',
+    message: authRequired
+      ? `${provider} is installed, but authentication is not ready.`
+      : `${provider} live check failed.`,
+    ...(detail ? { detail } : {}),
+    hint: authRequired ? authHint : 'Retry the check. If it still fails, inspect the provider CLI directly on the host.',
+  })
+
+  return {
+    adapterType: provider,
+    status: authRequired ? 'warn' : 'fail',
+    checks,
+    testedAt: new Date().toISOString(),
+  }
 }
 
 function normalizeDomain(value) {
@@ -91,6 +169,34 @@ export async function POST(request) {
       const installResult = await runProviderScript('install', provider)
       return setupResponse({
         installOutput: installResult.stdout || installResult.stderr || `${provider} installed`,
+      })
+    }
+
+    if (action === 'set_provider_auth') {
+      const provider = String(body.provider || '').trim()
+      const apiKey = String(body.apiKey || '').trim()
+      if (!['claude', 'codex'].includes(provider)) {
+        return invalid('Provider must be claude or codex')
+      }
+
+      await runSetupAction('set-provider-auth', { provider, api_key: apiKey })
+      return setupResponse({
+        providerAuthMessage: apiKey ? `${provider} API key saved` : `${provider} API key cleared`,
+      })
+    }
+
+    if (action === 'probe_provider') {
+      const provider = String(body.provider || '').trim()
+      if (!['claude', 'codex'].includes(provider)) {
+        return invalid('Provider must be claude or codex')
+      }
+
+      const probeResult = await probeProviderScript(provider)
+      const installResult = await runProviderScript('status', provider)
+      const state = await getSetupState()
+      return NextResponse.json({
+        ...state,
+        providerProbe: buildProviderProbe(provider, probeResult, installResult.code === 0),
       })
     }
 
