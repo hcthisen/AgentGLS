@@ -1,0 +1,12 @@
+{
+  "name": "agentos-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "ssh2": "^1.16.0"
+  }
+}

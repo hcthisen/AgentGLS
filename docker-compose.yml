@@ -1,0 +1,76 @@
+services:
+  supabase-db:
+    image: postgres:15-alpine
+    container_name: agentos-db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      - ./supabase/migrations/000_init.sh:/docker-entrypoint-initdb.d/000_init.sh:ro
+      - ./supabase/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ./supabase/migrations/002_secrets_table.sql:/docker-entrypoint-initdb.d/002_secrets_table.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  supabase-rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: agentos-rest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  dashboard:
+    build: ./dashboard
+    container_name: agentos-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - supabase-rest
+    environment:
+      SUPABASE_URL: http://supabase-rest:3000
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SSH_HOST: host.docker.internal
+      SSH_USER: agentos
+      AGENTOS_HOST_MOUNT: /opt/agentos-host
+    volumes:
+      - .:/opt/agentos-host:ro
+      - ./terminal-ssh-key:/ssh-key/id_ed25519:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  terminal-ws:
+    build: ./terminal
+    container_name: agentos-terminal
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      SSH_HOST: host.docker.internal
+      SSH_USER: agentos
+      AGENTOS_HOST_MOUNT: /opt/agentos-host
+    volumes:
+      - .:/opt/agentos-host:ro
+      - ./terminal-ssh-key:/ssh-key/id_ed25519:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  supabase-db-data:

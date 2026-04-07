@@ -1,0 +1,4 @@
+dashboard.{$AGENTOS_DOMAIN} {
+	reverse_proxy /ws/terminal localhost:3002
+	reverse_proxy localhost:3000
+}

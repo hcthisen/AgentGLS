@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Dev helpers (contain VPS credentials)
+vps.py
+sync-to-vps.py
+
+# Docker volumes
+supabase-db-data/
+
+# Node
+node_modules/
+.next/
+dashboard/.next/
+dashboard/node_modules/
+
+# Logs
+logs/
+*.log
+
+# Reference repos
+Reference-Code-Repos/
+
+# OS
+.DS_Store
+Thumbs.db
