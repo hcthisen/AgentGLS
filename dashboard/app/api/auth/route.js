@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createHash } from 'crypto'
-import { buildSessionToken, getDashboardAuthConfig } from '../../lib/auth'
+import { buildSessionToken, getDashboardAuthConfig, sessionCookieOptions } from '../../lib/auth'
 
 export async function POST(request) {
   const { email, password } = await request.json()
@@ -23,15 +23,12 @@ export async function POST(request) {
   }
 
   const sessionToken = buildSessionToken()
+  if (!sessionToken) {
+    return NextResponse.json({ error: 'Dashboard auth secret is missing' }, { status: 500 })
+  }
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('dashboard_session', sessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: '/',
-  })
+  response.cookies.set('dashboard_session', sessionToken, sessionCookieOptions(request))
 
   return response
 }

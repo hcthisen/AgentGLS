@@ -1,7 +1,8 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import GoalsTab from './components/GoalsTab'
 import SecretsTab from './components/SecretsTab'
+import SetupWizard from './components/SetupWizard'
 import TerminalTab from './components/TerminalTab'
 
 function Stat({ label, value, status }) {
@@ -102,333 +103,6 @@ function LoginForm({ adminEmail, onLogin }) {
   )
 }
 
-function SetupCard({ title, status, children }) {
-  const statusClass = status === 'done' ? 'ok' : status === 'active' ? 'warn' : ''
-
-  return (
-    <div className="section setup-card">
-      <div className="section-header setup-card-header">
-        <span>{title}</span>
-        <span className={`setup-badge ${statusClass}`}>{status}</span>
-      </div>
-      <div className="section-body">{children}</div>
-    </div>
-  )
-}
-
-function SetupPanel({ setupState, authenticated, onSetupUpdate, onAuthenticated }) {
-  const [adminName, setAdminName] = useState(setupState?.adminName || '')
-  const [adminEmail, setAdminEmail] = useState(setupState?.adminEmail || '')
-  const [adminPassword, setAdminPassword] = useState('')
-  const [provider, setProvider] = useState(setupState?.provider?.selected || 'claude')
-  const [domain, setDomain] = useState(setupState?.domain?.value || '')
-  const [domainResult, setDomainResult] = useState(null)
-  const [telegramToken, setTelegramToken] = useState('')
-  const [businessContext, setBusinessContext] = useState('')
-  const [goalTitle, setGoalTitle] = useState('')
-  const [goalSummary, setGoalSummary] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [busyAction, setBusyAction] = useState('')
-
-  useEffect(() => {
-    setAdminName(setupState?.adminName || '')
-    setAdminEmail(setupState?.adminEmail || '')
-    setProvider(setupState?.provider?.selected || 'claude')
-    setDomain(setupState?.domain?.value || '')
-  }, [setupState])
-
-  const runSetupAction = useCallback(
-    async (action, payload = {}) => {
-      setBusyAction(action)
-      setError('')
-      setMessage('')
-
-      try {
-        const res = await fetch('/api/setup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, ...payload }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          throw new Error(data.error || 'Setup action failed')
-        }
-
-        onSetupUpdate(data)
-        if (action === 'set_admin') {
-          onAuthenticated(true)
-        }
-
-        setMessage(data.installOutput || data.caddyMessage || 'Saved')
-        return data
-      } catch (actionError) {
-        setError(actionError instanceof Error ? actionError.message : 'Setup action failed')
-        return null
-      } finally {
-        setBusyAction('')
-      }
-    },
-    [onAuthenticated, onSetupUpdate]
-  )
-
-  const checkDomain = async () => {
-    setBusyAction('check_domain')
-    setError('')
-    setMessage('')
-    try {
-      const res = await fetch('/api/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'check_domain', domain }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'DNS check failed')
-      }
-      setDomainResult(data)
-      setMessage(data.matches ? 'DNS matches this VPS.' : 'DNS does not point at this VPS yet.')
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'DNS check failed')
-    } finally {
-      setBusyAction('')
-    }
-  }
-
-  const providerStatus = useMemo(() => {
-    if (!setupState?.provider?.selected) return 'pending'
-    if (setupState.provider.installed && setupState.provider.authenticated) return 'done'
-    if (setupState.provider.installed) return 'active'
-    return 'pending'
-  }, [setupState])
-
-  const domainStatus = setupState?.domain?.done ? 'done' : 'pending'
-  const telegramStatus = setupState?.telegram?.done ? 'done' : 'pending'
-  const contextStatus = setupState?.context?.configured ? 'done' : 'pending'
-  const goalStatus = setupState?.initialGoal?.configured ? 'done' : 'pending'
-
-  return (
-    <div className="dashboard">
-      <div className="header">
-        <div>
-          <h1>AgentGLS // onboarding</h1>
-          <div className="refresh">Bootstrap is done. Finish runtime setup here.</div>
-        </div>
-        {authenticated && (
-          <button className="logout-btn" onClick={() => onAuthenticated(false)}>
-            lock
-          </button>
-        )}
-      </div>
-
-      {(message || error) && (
-        <div className={`setup-banner ${error ? 'error' : 'ok'}`}>{error || message}</div>
-      )}
-
-      <div className="setup-grid">
-        <SetupCard title="1. Admin account" status={setupState?.adminConfigured ? 'done' : 'active'}>
-          <p className="setup-copy">
-            Protect the dashboard first. This also unlocks the web terminal for provider auth.
-          </p>
-          <div className="setup-form-grid">
-            <input
-              type="text"
-              placeholder="admin name"
-              value={adminName}
-              onChange={(e) => setAdminName(e.target.value)}
-            />
-            <input
-              type="email"
-              placeholder="admin email"
-              value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
-            />
-          </div>
-          <input
-            type="password"
-            placeholder={setupState?.adminConfigured ? 'set a new password' : 'password'}
-            value={adminPassword}
-            onChange={(e) => setAdminPassword(e.target.value)}
-          />
-          <div className="form-actions">
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_admin'}
-              onClick={() =>
-                runSetupAction('set_admin', {
-                  name: adminName,
-                  email: adminEmail,
-                  password: adminPassword,
-                })
-              }
-            >
-              {busyAction === 'set_admin' ? 'saving...' : setupState?.adminConfigured ? 'update admin' : 'create admin'}
-            </button>
-          </div>
-        </SetupCard>
-
-        <SetupCard title="2. Provider selection" status={providerStatus}>
-          <p className="setup-copy">
-            Install only the active runtime now. You can add the other CLI later with the documented manual path.
-          </p>
-          <div className="provider-choice">
-            <label className={`choice ${provider === 'claude' ? 'selected' : ''}`}>
-              <input type="radio" checked={provider === 'claude'} onChange={() => setProvider('claude')} />
-              <span>Claude Code</span>
-            </label>
-            <label className={`choice ${provider === 'codex' ? 'selected' : ''}`}>
-              <input type="radio" checked={provider === 'codex'} onChange={() => setProvider('codex')} />
-              <span>OpenAI Codex</span>
-            </label>
-          </div>
-          {setupState?.provider?.selected && (
-            <div className="setup-detail">
-              <div>Selected: <code>{setupState.provider.selected}</code></div>
-              <div>Install status: <code>{setupState.provider.installStatus}</code></div>
-              <div>Auth status: <code>{setupState.provider.authStatus}</code></div>
-            </div>
-          )}
-          <div className="form-actions">
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_provider'}
-              onClick={() => runSetupAction('set_provider', { provider })}
-            >
-              {busyAction === 'set_provider' ? 'installing...' : 'save + install provider'}
-            </button>
-          </div>
-        </SetupCard>
-
-        <SetupCard title="3. Provider auth" status={setupState?.provider?.authenticated ? 'done' : 'active'}>
-          <p className="setup-copy">
-            Use the embedded terminal below for the one-time login flow, then re-check status here.
-          </p>
-          <div className="setup-detail">
-            <div>Recommended command: <code>{setupState?.provider?.authCommand || 'choose a provider first'}</code></div>
-            <div>Manual install later: <code>{setupState?.provider?.manualInstallCommand || 'n/a'}</code></div>
-          </div>
-          <div className="form-actions">
-            <button className="btn-action" disabled={busyAction === 'refresh'} onClick={() => onSetupUpdate(null)}>
-              refresh status
-            </button>
-          </div>
-          {setupState?.adminConfigured && (
-            <div className="embedded-terminal">
-              <TerminalTab />
-            </div>
-          )}
-        </SetupCard>
-
-        <SetupCard title="4. Domain" status={domainStatus}>
-          <p className="setup-copy">
-            Point <code>dashboard.yourdomain.com</code> at this VPS for automatic TLS, or skip and keep using the raw IP.
-          </p>
-          <input
-            type="text"
-            placeholder="example.com"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-          />
-          {domainResult && (
-            <div className={`setup-banner ${domainResult.matches ? 'ok' : 'warn'}`}>
-              {domainResult.matches
-                ? `${domainResult.domain} resolves to ${domainResult.expectedIp}`
-                : `${domainResult.domain} resolves to ${domainResult.addresses.join(', ') || 'nothing yet'}; expected ${domainResult.expectedIp}`}
-            </div>
-          )}
-          <div className="form-actions">
-            <button className="btn-sm" disabled={busyAction === 'check_domain'} onClick={checkDomain}>
-              check dns
-            </button>
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_domain'}
-              onClick={() => runSetupAction('set_domain', { domain })}
-            >
-              {busyAction === 'set_domain' ? 'saving...' : 'save domain'}
-            </button>
-            <button className="btn-cancel" disabled={busyAction === 'set_domain'} onClick={() => runSetupAction('set_domain', { skip: true })}>
-              skip for now
-            </button>
-          </div>
-        </SetupCard>
-
-        <SetupCard title="5. Telegram" status={telegramStatus}>
-          <p className="setup-copy">
-            Store the bot token here, then pair the operator chat with <code>/opt/agentgls/scripts/telegram-setup.sh</code>.
-          </p>
-          <input
-            type="password"
-            placeholder={setupState?.telegram?.configured ? `configured: ${setupState.telegram.maskedToken}` : 'bot token'}
-            value={telegramToken}
-            onChange={(e) => setTelegramToken(e.target.value)}
-          />
-          <div className="form-actions">
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_telegram'}
-              onClick={() => runSetupAction('set_telegram', { token: telegramToken })}
-            >
-              {busyAction === 'set_telegram' ? 'saving...' : 'save token'}
-            </button>
-            <button className="btn-cancel" disabled={busyAction === 'set_telegram'} onClick={() => runSetupAction('set_telegram', { skip: true })}>
-              skip for now
-            </button>
-          </div>
-        </SetupCard>
-
-        <SetupCard title="6. Business context" status={contextStatus}>
-          <p className="setup-copy">
-            This becomes <code>/opt/agentgls/goals/_context.md</code> and is the standing context for future GoalLoop work.
-          </p>
-          <textarea
-            rows={8}
-            placeholder="What the business does, current situation, constraints, and what matters most right now."
-            value={businessContext}
-            onChange={(e) => setBusinessContext(e.target.value)}
-          />
-          <div className="form-actions">
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_context'}
-              onClick={() => runSetupAction('set_context', { text: businessContext })}
-            >
-              {busyAction === 'set_context' ? 'saving...' : 'save context'}
-            </button>
-          </div>
-        </SetupCard>
-
-        <SetupCard title="7. Initial goal" status={goalStatus}>
-          <p className="setup-copy">
-            The first goal file is created in <code>/opt/agentgls/goals/active/</code> with <code>brief_status: draft</code>.
-          </p>
-          <input
-            type="text"
-            placeholder="goal title"
-            value={goalTitle}
-            onChange={(e) => setGoalTitle(e.target.value)}
-          />
-          <textarea
-            rows={6}
-            placeholder="Describe the first goal clearly enough that the runtime can refine and work it later."
-            value={goalSummary}
-            onChange={(e) => setGoalSummary(e.target.value)}
-          />
-          <div className="form-actions">
-            <button
-              className="btn-action"
-              disabled={busyAction === 'set_initial_goal'}
-              onClick={() => runSetupAction('set_initial_goal', { title: goalTitle, summary: goalSummary })}
-            >
-              {busyAction === 'set_initial_goal' ? 'creating...' : 'create first goal'}
-            </button>
-          </div>
-        </SetupCard>
-      </div>
-    </div>
-  )
-}
-
 function OverviewTab({ setupState }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -495,7 +169,19 @@ function OverviewTab({ setupState }) {
             <Stat label="Provider" value={setupState?.provider?.selected || 'unset'} status={setupState?.provider?.selected ? 'ok' : 'warn'} />
             <Stat label="Installed" value={setupState?.provider?.installed ? 'yes' : 'no'} status={setupState?.provider?.installed ? 'ok' : 'error'} />
             <Stat label="Authenticated" value={setupState?.provider?.authenticated ? 'yes' : 'no'} status={setupState?.provider?.authenticated ? 'ok' : 'error'} />
-            <Stat label="Telegram" value={setupState?.telegram?.configured ? 'token stored' : setupState?.telegram?.skipped ? 'skipped' : 'pending'} status={setupState?.telegram?.configured ? 'ok' : 'warn'} />
+            <Stat
+              label="Telegram"
+              value={
+                setupState?.telegram?.skipped
+                  ? 'skipped'
+                  : setupState?.telegram?.bridgeRunning
+                    ? 'bridge live'
+                    : setupState?.telegram?.configured
+                      ? 'token stored'
+                      : 'pending'
+              }
+              status={setupState?.telegram?.operational ? 'ok' : 'warn'}
+            />
           </div>
         </div>
       </div>
@@ -633,7 +319,7 @@ export default function Home() {
 
   if (!adminConfigured) {
     return (
-      <SetupPanel
+      <SetupWizard
         setupState={setupState}
         authenticated={authenticated}
         onAuthenticated={setAuthenticated}
@@ -655,7 +341,7 @@ export default function Home() {
 
   if (!setupState?.completed) {
     return (
-      <SetupPanel
+      <SetupWizard
         setupState={setupState}
         authenticated={authenticated}
         onAuthenticated={(value) => {

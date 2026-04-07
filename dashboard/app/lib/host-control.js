@@ -7,6 +7,9 @@ const SSH_HOST = process.env.SSH_HOST || 'host.docker.internal'
 const SSH_USER = process.env.SSH_USER || 'agentgls'
 const SSH_KEY_PATH = '/ssh-key/id_ed25519'
 const HOST_INSTALL_DIR = '/opt/agentgls'
+const PROVIDER_LIB_PATH = `${HOST_INSTALL_DIR}/scripts/provider-lib.sh`
+const TELEGRAM_BRIDGE_PATH = `${HOST_INSTALL_DIR}/scripts/telegram-bridge.py`
+const TELEGRAM_LOG_PATH = `${HOST_INSTALL_DIR}/logs/telegram-bridge.log`
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
@@ -78,6 +81,71 @@ export function runProviderScript(subcommand, provider) {
   if (provider) args.push(provider)
   const command = args.map(shellQuote).join(' ')
   return runHostCommand(command, { allowFailure: subcommand !== 'install' })
+}
+
+export async function getTelegramBridgeState() {
+  const result = await runHostCommand(
+    `python3 ${shellQuote(TELEGRAM_BRIDGE_PATH)} inspect`,
+    { allowFailure: true }
+  )
+
+  if (result.code !== 0) {
+    throw new Error(result.stderr || result.stdout || 'Telegram bridge inspection failed')
+  }
+
+  try {
+    return JSON.parse(result.stdout || '{}')
+  } catch {
+    throw new Error('Telegram bridge inspection returned invalid JSON')
+  }
+}
+
+export function approveTelegramPair(code) {
+  return runHostCommand(
+    `python3 ${shellQuote(TELEGRAM_BRIDGE_PATH)} pair ${shellQuote(code)}`,
+    { allowFailure: true }
+  )
+}
+
+export function startTelegramBridge() {
+  const script = [
+    `source ${shellQuote(PROVIDER_LIB_PATH)}`,
+    `bridge_script=${shellQuote(TELEGRAM_BRIDGE_PATH)}`,
+    `log_file=${shellQuote(TELEGRAM_LOG_PATH)}`,
+    'mkdir -p "$(dirname "$log_file")"',
+    'if provider_telegram_bridge_running; then',
+    '  pkill -f "python3 ${bridge_script} run" >/dev/null 2>&1 || pkill -f "${bridge_script} run" >/dev/null 2>&1 || true',
+    '  sleep 1',
+    'fi',
+    'nohup python3 "$bridge_script" run >> "$log_file" 2>&1 < /dev/null &',
+    'sleep 2',
+    'if provider_telegram_bridge_running; then',
+    '  echo "telegram bridge running"',
+    'else',
+    '  echo "telegram bridge failed to start" >&2',
+    '  exit 1',
+    'fi',
+  ].join('\n')
+
+  return runHostCommand(script)
+}
+
+export function stopTelegramBridge() {
+  const script = [
+    `source ${shellQuote(PROVIDER_LIB_PATH)}`,
+    `bridge_script=${shellQuote(TELEGRAM_BRIDGE_PATH)}`,
+    'if provider_telegram_bridge_running; then',
+    '  pkill -f "python3 ${bridge_script} run" >/dev/null 2>&1 || pkill -f "${bridge_script} run" >/dev/null 2>&1 || true',
+    '  sleep 1',
+    'fi',
+    'if provider_telegram_bridge_running; then',
+    '  echo "telegram bridge is still running" >&2',
+    '  exit 1',
+    'fi',
+    'echo "telegram bridge stopped"',
+  ].join('\n')
+
+  return runHostCommand(script)
 }
 
 export function configureCaddy(domain) {

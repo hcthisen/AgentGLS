@@ -318,7 +318,9 @@ tr:hover td {
 }
 
 .setup-card input,
-.setup-card textarea {
+.setup-card textarea,
+.setup-stage input,
+.setup-stage textarea {
   width: 100%;
   padding: 0.55rem;
   background: var(--bg);
@@ -331,7 +333,9 @@ tr:hover td {
 }
 
 .setup-card input:focus,
-.setup-card textarea:focus {
+.setup-card textarea:focus,
+.setup-stage input:focus,
+.setup-stage textarea:focus {
   border-color: var(--blue);
 }
 
@@ -396,6 +400,218 @@ tr:hover td {
 .setup-banner code {
   color: var(--blue);
   word-break: break-word;
+}
+
+.setup-shell {
+  display: grid;
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.setup-sidebar {
+  position: sticky;
+  top: 1rem;
+}
+
+.setup-progress-copy {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+  font-size: 12px;
+}
+
+.setup-rail {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.setup-rail-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.setup-rail-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.setup-rail-item.active {
+  border-color: var(--green);
+}
+
+.setup-rail-item.done {
+  border-color: rgba(0, 255, 65, 0.18);
+}
+
+.setup-rail-item.active:not(.done):not(.skipped) {
+  border-color: rgba(77, 166, 255, 0.3);
+}
+
+.setup-rail-item.skipped {
+  border-color: rgba(255, 204, 0, 0.24);
+}
+
+.setup-rail-index {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.setup-rail-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.setup-rail-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.setup-rail-title {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.setup-step-status {
+  border: 1px solid var(--border);
+  padding: 0.18rem 0.4rem;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.setup-step-status.done {
+  color: var(--green);
+  border-color: rgba(0, 255, 65, 0.35);
+}
+
+.setup-step-status.active {
+  color: var(--blue);
+  border-color: rgba(77, 166, 255, 0.35);
+}
+
+.setup-step-status.skipped {
+  color: var(--yellow);
+  border-color: rgba(255, 204, 0, 0.35);
+}
+
+.setup-snapshot {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.setup-snapshot-title,
+.setup-subtitle {
+  color: var(--blue);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.setup-snapshot-item {
+  padding: 0.5rem 0.55rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.setup-snapshot-item span {
+  display: block;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.setup-snapshot-item strong {
+  display: block;
+  margin-top: 0.18rem;
+  font-weight: normal;
+}
+
+.setup-snapshot-item strong.ok {
+  color: var(--green);
+}
+
+.setup-stage-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.setup-stage-intro {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.setup-step-title {
+  color: var(--green);
+  font-size: 18px;
+  margin-bottom: 0.35rem;
+}
+
+.setup-subsection {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.setup-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.setup-list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.setup-list-title {
+  color: var(--text);
+}
+
+.setup-list-copy {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 0.12rem;
+}
+
+.setup-empty-state {
+  padding: 0.8rem;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  background: var(--bg);
+  font-size: 12px;
+}
+
+.setup-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem;
+}
+
+.setup-stage-footer {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
 }
 
 .embedded-terminal {
@@ -704,5 +920,22 @@ tr:hover td {
   .setup-form-grid,
   .provider-choice {
     grid-template-columns: 1fr;
+  }
+
+  .setup-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-sidebar {
+    position: static;
+  }
+
+  .setup-rail-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .setup-step-status {
+    grid-column: 2;
+    justify-self: start;
   }
 }

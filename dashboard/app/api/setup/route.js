@@ -1,8 +1,15 @@
 import { createHash } from 'crypto'
 import dns from 'dns/promises'
 import { NextResponse } from 'next/server'
-import { buildSessionToken, requireSetupAccess } from '../../lib/auth'
-import { configureCaddy, runProviderScript, runSetupAction } from '../../lib/host-control'
+import { buildSessionToken, requireSetupAccess, sessionCookieOptions } from '../../lib/auth'
+import {
+  approveTelegramPair,
+  configureCaddy,
+  runProviderScript,
+  runSetupAction,
+  startTelegramBridge,
+  stopTelegramBridge,
+} from '../../lib/host-control'
 import { getSetupState } from '../../lib/setup-state'
 
 function unauthorized() {
@@ -64,14 +71,13 @@ export async function POST(request) {
       const passwordHash = createHash('sha256').update(password).digest('hex')
       await runSetupAction('set-admin', { name, email, password_hash: passwordHash })
 
+      const sessionToken = buildSessionToken()
+      if (!sessionToken) {
+        return NextResponse.json({ error: 'Dashboard auth secret is missing' }, { status: 500 })
+      }
+
       const response = await setupResponse()
-      response.cookies.set('dashboard_session', buildSessionToken(), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60,
-        path: '/',
-      })
+      response.cookies.set('dashboard_session', sessionToken, sessionCookieOptions(request))
       return response
     }
 
@@ -140,7 +146,38 @@ export async function POST(request) {
       }
 
       await runSetupAction('set-telegram', skip ? { skip: true } : { token })
-      return setupResponse()
+      if (skip) {
+        await stopTelegramBridge().catch(() => null)
+        return setupResponse({ telegramMessage: 'Telegram skipped for now' })
+      }
+
+      const bridgeResult = await startTelegramBridge()
+      return setupResponse({
+        telegramMessage: bridgeResult.stdout || bridgeResult.stderr || 'Telegram bridge started',
+      })
+    }
+
+    if (action === 'restart_telegram') {
+      const bridgeResult = await startTelegramBridge()
+      return setupResponse({
+        telegramMessage: bridgeResult.stdout || bridgeResult.stderr || 'Telegram bridge restarted',
+      })
+    }
+
+    if (action === 'pair_telegram') {
+      const code = String(body.code || '').trim().toUpperCase()
+      if (!code) {
+        return invalid('Pairing code is required')
+      }
+
+      const pairResult = await approveTelegramPair(code)
+      if (pairResult.code !== 0) {
+        return invalid(pairResult.stderr || pairResult.stdout || 'Pairing failed')
+      }
+
+      return setupResponse({
+        telegramMessage: pairResult.stdout || `Paired chat with code ${code}`,
+      })
     }
 
     if (action === 'set_context') {

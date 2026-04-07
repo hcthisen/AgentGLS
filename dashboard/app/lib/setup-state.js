@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { GOALS_PATH, readRuntimeEnv, readTextFile } from './runtime-config'
-import { runProviderScript } from './host-control'
+import { getTelegramBridgeState, runProviderScript } from './host-control'
 
 function firstGoalPath() {
   try {
@@ -40,6 +40,7 @@ function authCommandFor(provider, adminEmail = '') {
 export async function getSetupState() {
   const env = readRuntimeEnv()
   const goalPath = firstGoalPath()
+  const contextText = readTextFile(path.join(GOALS_PATH, '_context.md')).trim()
 
   const state = {
     adminConfigured: Boolean(env.AGENTGLS_ADMIN_EMAIL && env.DASHBOARD_PASSWORD_HASH),
@@ -64,9 +65,19 @@ export async function getSetupState() {
       configured: Boolean(env.TELEGRAM_BOT_TOKEN),
       skipped: env.AGENTGLS_TELEGRAM_SKIPPED === '1',
       maskedToken: maskToken(env.TELEGRAM_BOT_TOKEN || ''),
+      bridgeRunning: false,
+      operational: false,
+      pendingPairs: 0,
+      allowlistedChats: 0,
+      envAllowlistedChats: 0,
+      logFile: '',
+      pendingRequests: [],
+      allowedChats: [],
+      statusError: '',
     },
     context: {
-      configured: Boolean(readTextFile(path.join(GOALS_PATH, '_context.md')).trim()),
+      configured: Boolean(contextText),
+      text: contextText,
     },
     initialGoal: {
       configured: Boolean(goalPath),
@@ -75,6 +86,7 @@ export async function getSetupState() {
   }
 
   state.telegram.done = state.telegram.configured || state.telegram.skipped
+  state.telegram.operational = state.telegram.skipped
 
   if (state.provider.selected) {
     state.provider.authCommand = authCommandFor(state.provider.selected, state.adminEmail)
@@ -102,13 +114,29 @@ export async function getSetupState() {
     }
   }
 
+  if (state.telegram.configured) {
+    try {
+      const telegramState = await getTelegramBridgeState()
+      state.telegram.bridgeRunning = Boolean(telegramState.bridge_running)
+      state.telegram.operational = state.telegram.bridgeRunning
+      state.telegram.pendingPairs = Number(telegramState.pending_pairs || 0)
+      state.telegram.allowlistedChats = Number(telegramState.allowlisted_chats || 0)
+      state.telegram.envAllowlistedChats = Number(telegramState.env_allowlisted_chats || 0)
+      state.telegram.logFile = telegramState.log_file || ''
+      state.telegram.pendingRequests = Array.isArray(telegramState.pending) ? telegramState.pending : []
+      state.telegram.allowedChats = Array.isArray(telegramState.allowlisted) ? telegramState.allowlisted : []
+    } catch (error) {
+      state.telegram.statusError = error instanceof Error ? error.message : 'telegram status unavailable'
+    }
+  }
+
   state.completed =
     state.adminConfigured &&
     Boolean(state.provider.selected) &&
     state.provider.installed &&
     state.provider.authenticated &&
     state.domain.done &&
-    state.telegram.done &&
+    state.telegram.operational &&
     state.context.configured &&
     state.initialGoal.configured
 

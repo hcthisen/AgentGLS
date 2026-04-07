@@ -22,6 +22,26 @@ export function buildSessionToken() {
   return createHash('sha256').update(passwordHash + jwtSecret).digest('hex')
 }
 
+export function shouldUseSecureCookie(request) {
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim().toLowerCase() === 'https'
+  }
+
+  const protocol = request.nextUrl?.protocol || ''
+  return protocol.toLowerCase() === 'https:'
+}
+
+export function sessionCookieOptions(request) {
+  return {
+    httpOnly: true,
+    secure: shouldUseSecureCookie(request),
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60,
+    path: '/',
+  }
+}
+
 export function verifySession(request) {
   const cookie = request.cookies.get('dashboard_session')
   if (!cookie) return false

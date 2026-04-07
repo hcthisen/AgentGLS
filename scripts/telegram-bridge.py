@@ -509,11 +509,106 @@ def print_status() -> int:
     payload = {
         "root": str(ROOT),
         "token_configured": bool(telegram_token()),
+        "bridge_running": bridge_running(),
         "pending_pairs": len(load_pending()),
         "allowlisted_chats": len(load_allowlist()),
         "env_allowlisted_chats": len(configured_allowlist_ids()),
         "next_offset": read_offset(),
         "log_file": str(LOG_PATH),
+    }
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def bridge_running() -> bool:
+    script = str(Path(__file__).resolve())
+    current_pid = str(os.getpid())
+    patterns = [f"python3 {script} run", f"{script} run"]
+
+    for pattern in patterns:
+        result = subprocess.run(
+            ["pgrep", "-f", pattern],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            continue
+        pids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if any(pid != current_pid for pid in pids):
+            return True
+
+    return False
+
+
+def serialize_pending_entries() -> list[dict[str, Any]]:
+    pending = load_pending()
+    entries = []
+
+    for chat_id, entry in sorted(
+        pending.items(),
+        key=lambda item: item[1].get("last_seen_at", ""),
+        reverse=True,
+    ):
+        entries.append(
+            {
+                "chat_id": chat_id,
+                "code": str(entry.get("code", "")).strip(),
+                "display_name": str(entry.get("display_name", "")).strip(),
+                "username": str(entry.get("username", "")).strip(),
+                "chat_type": str(entry.get("chat_type", "")).strip(),
+                "first_seen_at": str(entry.get("first_seen_at", "")).strip(),
+                "last_seen_at": str(entry.get("last_seen_at", "")).strip(),
+            }
+        )
+
+    return entries
+
+
+def serialize_allowlist_entries() -> list[dict[str, Any]]:
+    entries = []
+
+    for chat_id in sorted(configured_allowlist_ids()):
+        entries.append(
+            {
+                "chat_id": chat_id,
+                "source": "env",
+                "display_name": "",
+                "username": "",
+                "chat_type": "",
+                "paired_at": "",
+                "updated_at": "",
+            }
+        )
+
+    for chat_id, entry in sorted(load_allowlist().items()):
+        entries.append(
+            {
+                "chat_id": chat_id,
+                "source": "disk",
+                "display_name": str(entry.get("display_name", "")).strip(),
+                "username": str(entry.get("username", "")).strip(),
+                "chat_type": str(entry.get("chat_type", "")).strip(),
+                "paired_at": str(entry.get("paired_at", "")).strip(),
+                "updated_at": str(entry.get("updated_at", "")).strip(),
+            }
+        )
+
+    return entries
+
+
+def print_inspect() -> int:
+    payload = {
+        "root": str(ROOT),
+        "token_configured": bool(telegram_token()),
+        "bridge_running": bridge_running(),
+        "pending_pairs": len(load_pending()),
+        "allowlisted_chats": len(load_allowlist()),
+        "env_allowlisted_chats": len(configured_allowlist_ids()),
+        "next_offset": read_offset(),
+        "log_file": str(LOG_PATH),
+        "pending": serialize_pending_entries(),
+        "allowlisted": serialize_allowlist_entries(),
     }
     print(json.dumps(payload, indent=2))
     return 0
@@ -549,6 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-pending", help="List pending pairing requests")
     subparsers.add_parser("list-allowed", help="List allowlisted chat IDs")
     subparsers.add_parser("status", help="Print bridge status as JSON")
+    subparsers.add_parser("inspect", help="Print bridge status, pending pairs, and allowlisted chats as JSON")
     return parser
 
 
@@ -565,6 +661,8 @@ def main() -> int:
         return print_allowlist()
     if args.command == "status":
         return print_status()
+    if args.command == "inspect":
+        return print_inspect()
 
     raise AssertionError(f"Unhandled command: {args.command}")
 
