@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { GOALS_PATH, readRuntimeEnv, readTextFile } from './runtime-config'
-import { getTelegramBridgeState, runProviderScript } from './host-control'
+import { getProviderAuthState, getTelegramBridgeState, runProviderScript } from './host-control'
 
 function firstGoalPath() {
   try {
@@ -74,6 +74,7 @@ export async function getSetupState() {
       authStatus: 'pending',
       authMode: 'unknown',
       authWarning: '',
+      authSession: null,
     },
     domain: {
       value: configuredDashboardHost(env),
@@ -125,6 +126,15 @@ export async function getSetupState() {
       const message = error instanceof Error ? error.message : 'provider check failed'
       state.provider.installStatus = message
       state.provider.authStatus = message
+    }
+
+    try {
+      state.provider.authSession = await getProviderAuthState(state.provider.selected)
+    } catch (error) {
+      state.provider.authSession = {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'provider auth state unavailable',
+      }
     }
   }
 

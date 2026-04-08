@@ -4,10 +4,13 @@ import { NextResponse } from 'next/server'
 import { buildSessionToken, requireSetupAccess, sessionCookieOptions } from '../../lib/auth'
 import {
   approveTelegramPair,
+  cancelProviderAuth,
   configureCaddy,
+  startProviderAuth,
   probeProviderScript,
   runProviderScript,
   runSetupAction,
+  submitProviderAuthCode,
   startTelegramBridge,
   stopTelegramBridge,
 } from '../../lib/host-control'
@@ -33,8 +36,8 @@ function buildProviderProbe(provider, result, providerState) {
   const installed = Boolean(providerState?.installed)
   const authHint =
     provider === 'claude'
-      ? 'Run `claude auth login --claudeai` in the embedded terminal, then refresh and rerun the live check.'
-      : 'Run `codex login --device-auth` in the embedded terminal, then refresh and rerun the live check.'
+      ? 'Start Claude sign-in, open the auth link, then paste the callback URL or code before rerunning the live check.'
+      : 'Start ChatGPT sign-in, open the auth link, enter the one-time code, then rerun the live check.'
 
   const checks = [
     {
@@ -206,6 +209,40 @@ export async function POST(request) {
         ...state,
         providerProbe: buildProviderProbe(provider, probeResult, state.provider),
       })
+    }
+
+    if (action === 'start_provider_auth') {
+      const provider = String(body.provider || '').trim()
+      if (!['claude', 'codex'].includes(provider)) {
+        return invalid('Provider must be claude or codex')
+      }
+
+      await startProviderAuth(provider)
+      return setupResponse()
+    }
+
+    if (action === 'cancel_provider_auth') {
+      const provider = String(body.provider || '').trim()
+      if (!['claude', 'codex'].includes(provider)) {
+        return invalid('Provider must be claude or codex')
+      }
+
+      await cancelProviderAuth(provider)
+      return setupResponse()
+    }
+
+    if (action === 'submit_provider_auth_code') {
+      const provider = String(body.provider || '').trim()
+      const value = String(body.value || body.code || '').trim()
+      if (provider !== 'claude') {
+        return invalid('Only Claude accepts a pasted auth callback')
+      }
+      if (!value) {
+        return invalid('Paste the Claude callback URL or the code#state value')
+      }
+
+      await submitProviderAuthCode(provider, value)
+      return setupResponse()
     }
 
     if (action === 'check_domain') {

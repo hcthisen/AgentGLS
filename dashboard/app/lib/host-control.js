@@ -8,6 +8,7 @@ const SSH_USER = process.env.SSH_USER || 'agentgls'
 const SSH_KEY_PATH = '/ssh-key/id_ed25519'
 const HOST_INSTALL_DIR = '/opt/agentgls'
 const PROVIDER_LIB_PATH = `${HOST_INSTALL_DIR}/scripts/provider-lib.sh`
+const PROVIDER_AUTH_SCRIPT_PATH = `${HOST_INSTALL_DIR}/scripts/provider-auth.py`
 const TELEGRAM_BRIDGE_PATH = `${HOST_INSTALL_DIR}/scripts/telegram-bridge.py`
 const TELEGRAM_LOG_PATH = `${HOST_INSTALL_DIR}/logs/telegram-bridge.log`
 
@@ -85,6 +86,39 @@ export function runProviderScript(subcommand, provider) {
 
 export function probeProviderScript(provider) {
   return runProviderScript('probe', provider)
+}
+
+async function parseJsonStdout(result, fallbackMessage) {
+  try {
+    return JSON.parse(result.stdout || '{}')
+  } catch {
+    throw new Error(fallbackMessage)
+  }
+}
+
+export async function runProviderAuthAction(action, provider, payload = {}) {
+  const stdin = JSON.stringify(payload)
+  const result = await runHostCommand(
+    `python3 ${shellQuote(PROVIDER_AUTH_SCRIPT_PATH)} ${shellQuote(action)} ${shellQuote(provider)}`,
+    { stdin }
+  )
+  return parseJsonStdout(result, 'Provider auth response was not valid JSON')
+}
+
+export function getProviderAuthState(provider) {
+  return runProviderAuthAction('status', provider)
+}
+
+export function startProviderAuth(provider) {
+  return runProviderAuthAction('start', provider)
+}
+
+export function cancelProviderAuth(provider) {
+  return runProviderAuthAction('cancel', provider)
+}
+
+export function submitProviderAuthCode(provider, value) {
+  return runProviderAuthAction('submit', provider, { value })
 }
 
 export async function getTelegramBridgeState() {

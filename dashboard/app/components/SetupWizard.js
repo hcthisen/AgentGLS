@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import TerminalPane from './TerminalPane'
 
 const STEP_ORDER = ['admin', 'provider', 'domain', 'telegram', 'context', 'launch']
 
@@ -13,7 +12,7 @@ const STEP_META = {
   provider: {
     label: 'Runtime',
     title: 'Choose and authorize the active provider',
-    blurb: 'Bootstrap installs both CLIs. Choose the active runtime, sign in through the embedded terminal, and verify it with a live check.',
+    blurb: 'Bootstrap installs both CLIs. Choose the active runtime, start sign-in from the browser, and verify it with a live check.',
   },
   domain: {
     label: 'Domain',
@@ -110,26 +109,46 @@ function providerAuthMeta(provider) {
   if (provider === 'claude') {
     return {
       authLabel: 'Claude subscription login',
-      command: 'claude auth login --claudeai',
+      connectLabel: 'Connect Claude',
+      openLabel: 'Open Claude sign-in',
       statusCommand: 'claude auth status --json',
-      intro: 'Claude Code should use the Claude subscription flow. It opens a browser-based login from the VPS terminal session.',
+      intro: 'Claude Code uses a server-side subscription sign-in session. Open the Claude auth link, then paste the callback URL or code#state value back here.',
     }
   }
 
   if (provider === 'codex') {
     return {
       authLabel: 'ChatGPT / device auth',
-      command: 'codex login --device-auth',
+      connectLabel: 'Connect ChatGPT',
+      openLabel: 'Open ChatGPT sign-in page',
       statusCommand: 'codex login status',
-      intro: 'Codex should use ChatGPT subscription access. Device auth is the recommended path for remote or headless VPS installs.',
+      intro: 'Codex uses ChatGPT device auth. AgentGLS starts device auth on the server, then shows the sign-in link and one-time code here.',
     }
   }
 
   return {
     authLabel: 'Provider login',
-    command: '',
+    connectLabel: 'Connect provider',
+    openLabel: 'Open sign-in',
     statusCommand: '',
     intro: '',
+  }
+}
+
+function providerAuthStatusLabel(status) {
+  switch (status) {
+    case 'starting':
+      return 'starting'
+    case 'waiting':
+      return 'waiting for browser sign-in'
+    case 'complete':
+      return 'connected'
+    case 'failed':
+      return 'failed'
+    case 'canceled':
+      return 'canceled'
+    default:
+      return 'idle'
   }
 }
 
@@ -275,6 +294,7 @@ export default function SetupWizard({
   const [adminPassword, setAdminPassword] = useState('')
   const [provider, setProvider] = useState(setupState?.provider?.selected || 'claude')
   const [providerDirty, setProviderDirty] = useState(false)
+  const [providerAuthCode, setProviderAuthCode] = useState('')
   const [providerProbe, setProviderProbe] = useState(null)
   const [domain, setDomain] = useState(setupState?.domain?.value || '')
   const [domainResult, setDomainResult] = useState(null)
@@ -300,6 +320,7 @@ export default function SetupWizard({
 
   useEffect(() => {
     setProviderProbe(null)
+    setProviderAuthCode('')
   }, [provider])
 
   const steps = buildSteps(setupState)
@@ -310,6 +331,10 @@ export default function SetupWizard({
   const savedProvider = setupState?.provider?.selected || ''
   const providerSaved = provider === savedProvider
   const currentProviderMeta = providerAuthMeta(provider)
+  const providerAuthSession = providerSaved ? setupState?.provider?.authSession || null : null
+  const providerAuthSessionStatus = providerSaved
+    ? providerAuthSession?.status || (setupState?.provider?.authenticated ? 'complete' : 'idle')
+    : 'idle'
   const providerInstallStatus = providerSaved
     ? setupState?.provider?.installStatus || 'pending'
     : savedProvider
@@ -317,7 +342,17 @@ export default function SetupWizard({
       : 'save this provider to continue'
   const providerAuthStatus = providerSaved
     ? setupState?.provider?.authStatus || 'pending'
-    : 'save this provider to unlock terminal-based authorization'
+    : 'save this provider to start browser-based authorization'
+
+  async function syncSetupState() {
+    const res = await fetch('/api/setup', { cache: 'no-store' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to refresh setup state')
+    }
+    onSetupUpdate(data)
+    return data
+  }
 
   async function refreshSetupState(notify = false) {
     setBusyAction('refresh_setup')
@@ -325,12 +360,7 @@ export default function SetupWizard({
     if (notify) setMessage('')
 
     try {
-      const res = await fetch('/api/setup', { cache: 'no-store' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to refresh setup state')
-      }
-      onSetupUpdate(data)
+      const data = await syncSetupState()
       if (notify) {
         setMessage('Runtime status refreshed')
       }
@@ -362,6 +392,7 @@ export default function SetupWizard({
       onSetupUpdate(data)
       if (action === 'set_admin') {
         onAuthenticated(true)
+        setCurrentStep('provider')
       }
       if (action === 'set_provider') {
         setProviderDirty(false)
@@ -380,13 +411,15 @@ export default function SetupWizard({
         setPairCode('')
       }
 
-      setMessage(
-        data.telegramMessage ||
-          data.installOutput ||
-          data.caddyMessage ||
-          options.successMessage ||
-          'Saved'
-      )
+      if (!options.suppressMessage) {
+        setMessage(
+          data.telegramMessage ||
+            data.installOutput ||
+            data.caddyMessage ||
+            options.successMessage ||
+            'Saved'
+        )
+      }
       return data
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Setup action failed')
@@ -394,6 +427,159 @@ export default function SetupWizard({
     } finally {
       setBusyAction('')
     }
+  }
+
+  useEffect(() => {
+    if (!providerSaved) return undefined
+    if (!['starting', 'waiting'].includes(providerAuthSessionStatus)) return undefined
+
+    const interval = window.setInterval(() => {
+      void fetch('/api/setup', { cache: 'no-store' })
+        .then((res) => res.json().catch(() => ({})).then((data) => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (ok) {
+            onSetupUpdate(data)
+          }
+        })
+        .catch(() => null)
+    }, 2000)
+
+    return () => window.clearInterval(interval)
+  }, [onSetupUpdate, providerAuthSessionStatus, providerSaved])
+
+  async function startProviderAuthSession(providerToStart = provider, authWindow = null) {
+    setBusyAction('start_provider_auth')
+    setError('')
+    setMessage('')
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start_provider_auth', provider: providerToStart }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to start provider sign-in')
+      }
+
+      onSetupUpdate(data)
+      const nextSession = data.provider?.authSession
+
+      if (authWindow) {
+        if (nextSession?.verificationUrl) {
+          authWindow.location.replace(nextSession.verificationUrl)
+        } else {
+          authWindow.close()
+        }
+      }
+
+      if (data.provider?.authenticated || nextSession?.authDetected || nextSession?.status === 'complete') {
+        setMessage('Provider login is already connected')
+      } else {
+        setMessage(
+          providerToStart === 'claude'
+            ? 'Claude sign-in started. Finish the browser flow, then paste the callback below.'
+            : 'ChatGPT sign-in started. Open the sign-in page and enter the one-time code below.'
+        )
+      }
+      return data
+    } catch (actionError) {
+      if (authWindow) authWindow.close()
+      setError(actionError instanceof Error ? actionError.message : 'Failed to start provider sign-in')
+      return null
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function cancelProviderAuthSession(providerToCancel = provider) {
+    setBusyAction('cancel_provider_auth')
+    setError('')
+    setMessage('')
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_provider_auth', provider: providerToCancel }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to cancel provider sign-in')
+      }
+
+      onSetupUpdate(data)
+      setMessage('Provider sign-in canceled')
+      return data
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Failed to cancel provider sign-in')
+      return null
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function submitProviderAuthCallback() {
+    const value = providerAuthCode.trim()
+    if (!value) {
+      setError('Paste the Claude callback URL or the code#state value')
+      return null
+    }
+
+    setBusyAction('submit_provider_auth_code')
+    setError('')
+    setMessage('')
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit_provider_auth_code',
+          provider: 'claude',
+          value,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit Claude callback')
+      }
+
+      onSetupUpdate(data)
+      setProviderAuthCode('')
+      setMessage('Claude callback submitted')
+      return data
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Failed to submit Claude callback')
+      return null
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function saveProviderAndStartAuth() {
+    const authWindow = typeof window !== 'undefined' ? window.open('', '_blank') : null
+    const data = await executeSetupAction(
+      'set_provider',
+      { provider },
+      {
+        suppressMessage: true,
+      }
+    )
+
+    if (!data) {
+      authWindow?.close()
+      return
+    }
+
+    if (data.provider?.authenticated) {
+      authWindow?.close()
+      setMessage(`${provider} saved as the active provider`)
+      return
+    }
+
+    await startProviderAuthSession(provider, authWindow)
   }
 
   async function runProviderCheck(providerToCheck = provider) {
@@ -677,43 +863,145 @@ export default function SetupWizard({
                     Expected auth: <code>{currentProviderMeta.authLabel || 'select a provider first'}</code>
                   </div>
                   <div>
+                    Sign-in session:{' '}
+                    <code>{providerSaved ? providerAuthStatusLabel(providerAuthSessionStatus) : 'save to start'}</code>
+                  </div>
+                  <div>
                     Status check: <code>{currentProviderMeta.statusCommand || '-'}</code>
                   </div>
                 </div>
                 {!providerSaved && (
                   <div className="setup-banner warn">
-                    Save this provider as active first. Then the embedded terminal and live check will target it.
+                    Save this provider as active first. AgentGLS will then start the browser sign-in flow for it.
                   </div>
                 )}
                 <div className="setup-copy">
                   {currentProviderMeta.intro}
                 </div>
-                <div className="setup-copy">
-                  Save the provider, run the login command below in the terminal, then refresh the runtime status and rerun the live hello probe.
-                </div>
-                <div className="setup-detail">
-                  <div>
-                    Login command: <code>{currentProviderMeta.command || 'save a provider first'}</code>
-                  </div>
-                </div>
                 {providerSaved && setupState?.provider?.authWarning && (
                   <div className="setup-banner warn">{setupState.provider.authWarning}</div>
+                )}
+                {providerSaved && providerAuthSession?.error && (
+                  <div className="setup-banner error">{providerAuthSession.error}</div>
+                )}
+                {providerSaved && (
+                  <div className="setup-subsection">
+                    <div className="setup-subtitle">Provider sign-in</div>
+                    {provider === 'claude' && (
+                      <>
+                        <div className="setup-copy">
+                          1. Click <strong>{currentProviderMeta.connectLabel}</strong> to start a Claude sign-in session.
+                          <br />
+                          2. Open the Claude sign-in page.
+                          <br />
+                          3. Finish the Claude flow and paste the callback URL or code#state value below.
+                        </div>
+                        {providerAuthSession?.verificationUrl && !setupState?.provider?.authenticated && (
+                          <div className="setup-copy">
+                            <a
+                              href={providerAuthSession.verificationUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="setup-inline-link"
+                            >
+                              {currentProviderMeta.openLabel}
+                            </a>
+                          </div>
+                        )}
+                        {!setupState?.provider?.authenticated && (
+                          <textarea
+                            rows={4}
+                            placeholder="Paste the Claude callback URL or the code#state value here"
+                            value={providerAuthCode}
+                            onChange={(event) => setProviderAuthCode(event.target.value)}
+                          />
+                        )}
+                        {setupState?.provider?.authenticated && (
+                          <div className="setup-banner ok">
+                            Claude subscription login is connected on the host.
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {provider === 'codex' && (
+                      <>
+                        <div className="setup-copy">
+                          1. Click <strong>{currentProviderMeta.connectLabel}</strong> to start ChatGPT device auth.
+                          <br />
+                          2. Open the sign-in page.
+                          <br />
+                          3. Enter the one-time code shown here and finish the browser flow.
+                        </div>
+                        {providerAuthSession?.userCode && !setupState?.provider?.authenticated && (
+                          <div className="setup-detail">
+                            <div>
+                              One-time code: <code>{providerAuthSession.userCode}</code>
+                            </div>
+                          </div>
+                        )}
+                        {providerAuthSession?.verificationUrl && !setupState?.provider?.authenticated && (
+                          <div className="setup-copy">
+                            <a
+                              href={providerAuthSession.verificationUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="setup-inline-link"
+                            >
+                              {currentProviderMeta.openLabel}
+                            </a>
+                          </div>
+                        )}
+                        {setupState?.provider?.authenticated && (
+                          <div className="setup-banner ok">
+                            ChatGPT subscription login is connected on the host.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
                 <div className="form-actions">
                   <button
                     type="button"
                     className="btn-action"
-                    disabled={busyAction === 'set_provider'}
-                    onClick={() =>
-                      executeSetupAction(
-                        'set_provider',
-                        { provider },
-                        { successMessage: `${provider} saved as the active provider` }
-                      )
-                    }
+                    disabled={busyAction === 'set_provider' || busyAction === 'start_provider_auth'}
+                    onClick={() => void saveProviderAndStartAuth()}
                   >
                     {busyAction === 'set_provider' ? 'saving...' : 'save active provider'}
                   </button>
+                  {providerSaved && !setupState?.provider?.authenticated && (
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      disabled={busyAction === 'start_provider_auth'}
+                      onClick={() => {
+                        const authWindow = typeof window !== 'undefined' ? window.open('', '_blank') : null
+                        void startProviderAuthSession(provider, authWindow)
+                      }}
+                    >
+                      {busyAction === 'start_provider_auth' ? 'starting...' : currentProviderMeta.connectLabel}
+                    </button>
+                  )}
+                  {providerSaved && provider === 'claude' && !setupState?.provider?.authenticated && (
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      disabled={busyAction === 'submit_provider_auth_code' || !providerAuthCode.trim()}
+                      onClick={() => void submitProviderAuthCallback()}
+                    >
+                      {busyAction === 'submit_provider_auth_code' ? 'submitting...' : 'submit callback'}
+                    </button>
+                  )}
+                  {providerSaved && ['starting', 'waiting'].includes(providerAuthSessionStatus) && (
+                    <button
+                      type="button"
+                      className="btn-cancel"
+                      disabled={busyAction === 'cancel_provider_auth'}
+                      onClick={() => void cancelProviderAuthSession(provider)}
+                    >
+                      {busyAction === 'cancel_provider_auth' ? 'canceling...' : 'cancel sign-in'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-sm"
@@ -731,17 +1019,6 @@ export default function SetupWizard({
                     {busyAction === 'probe_provider' ? 'checking...' : 'run live check'}
                   </button>
                 </div>
-                {providerSaved && (
-                  <div className="embedded-terminal">
-                    <div className="setup-subtitle">Embedded terminal</div>
-                    <div className="setup-copy">
-                      Run <code>{currentProviderMeta.command}</code> here. When the login finishes, use
-                      refresh auth status above to reload the provider state.
-                    </div>
-                    <pre className="setup-command"><code>{currentProviderMeta.command}</code></pre>
-                    <TerminalPane />
-                  </div>
-                )}
                 <ProviderProbeResult result={providerProbe} />
               </>
             )}

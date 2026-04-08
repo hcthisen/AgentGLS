@@ -402,6 +402,15 @@ tr:hover td {
   word-break: break-word;
 }
 
+.setup-inline-link {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.setup-inline-link:hover {
+  text-decoration: underline;
+}
+
 .setup-command {
   margin: 0 0 0.75rem;
   padding: 0.65rem 0.75rem;

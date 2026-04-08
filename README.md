@@ -50,7 +50,7 @@ After bootstrap completes:
 1. Open `http://VPS_IP:3000`
 2. Create the admin account
 3. Choose the active provider
-4. Authenticate that provider in the embedded terminal
+4. Authenticate that provider through the browser-based sign-in flow shown in onboarding
 5. Configure the public dashboard host if you want HTTPS
 6. Add the Telegram bot token
 7. Enter business context and the first goal
@@ -75,7 +75,7 @@ Important runtime values:
 
 ## Provider Authentication
 
-AgentGLS installs both provider CLIs during bootstrap and lets onboarding choose the active one. Authentication is handled through the provider CLI itself in the embedded terminal.
+AgentGLS installs both provider CLIs during bootstrap and lets onboarding choose the active one. Authentication is handled through server-side sign-in sessions exposed in the onboarding UI.
 
 ### Claude Code
 
