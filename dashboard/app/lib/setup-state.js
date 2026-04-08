@@ -26,30 +26,34 @@ function compact(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function providerApiKeyState(env, provider) {
-  if (provider === 'claude') {
-    return {
-      configured: Boolean(env.ANTHROPIC_API_KEY),
-      envVar: 'ANTHROPIC_API_KEY',
-      masked: maskToken(env.ANTHROPIC_API_KEY || ''),
-      label: 'Anthropic API key',
-    }
+function configuredDashboardHost(env) {
+  if (env.AGENTGLS_DASHBOARD_HOST) return env.AGENTGLS_DASHBOARD_HOST
+  if (env.AGENTGLS_DOMAIN) return `dashboard.${env.AGENTGLS_DOMAIN}`
+  return ''
+}
+
+function parseProviderAuthState(result) {
+  let payload = null
+
+  try {
+    payload = JSON.parse(String(result?.stdout || '').trim())
+  } catch {
+    payload = null
   }
 
-  if (provider === 'codex') {
-    return {
-      configured: Boolean(env.OPENAI_API_KEY),
-      envVar: 'OPENAI_API_KEY',
-      masked: maskToken(env.OPENAI_API_KEY || ''),
-      label: 'OpenAI API key',
-    }
-  }
+  const message = compact(
+    payload?.message || result?.stdout || result?.stderr || 'Provider authentication is not ready'
+  )
+  const mode = payload?.mode || 'unknown'
+  const status = payload?.status || 'missing'
+  const authenticated = (result?.code ?? 1) === 0 && status === 'authenticated' && mode === 'subscription'
+  const warning = (result?.code ?? 1) === 2 || status === 'warning' ? message : ''
 
   return {
-    configured: false,
-    envVar: '',
-    masked: '',
-    label: 'API key',
+    authenticated,
+    authMode: mode,
+    authStatus: message,
+    authWarning: warning,
   }
 }
 
@@ -68,16 +72,15 @@ export async function getSetupState() {
       authenticated: false,
       installStatus: 'pending',
       authStatus: 'pending',
-      apiKeyConfigured: false,
-      maskedApiKey: '',
-      authEnvVar: '',
-      authInputLabel: '',
+      authMode: 'unknown',
+      authWarning: '',
     },
     domain: {
-      value: env.AGENTGLS_DOMAIN || '',
-      configured: Boolean(env.AGENTGLS_DOMAIN),
+      value: configuredDashboardHost(env),
+      configured: Boolean(configuredDashboardHost(env)),
       skipped: env.AGENTGLS_DOMAIN_SKIPPED === '1',
-      done: Boolean(env.AGENTGLS_DOMAIN) || env.AGENTGLS_DOMAIN_SKIPPED === '1',
+      done: Boolean(configuredDashboardHost(env)) || env.AGENTGLS_DOMAIN_SKIPPED === '1',
+      source: env.AGENTGLS_DASHBOARD_HOST ? 'host' : env.AGENTGLS_DOMAIN ? 'legacy-domain' : '',
     },
     telegram: {
       configured: Boolean(env.TELEGRAM_BOT_TOKEN),
@@ -107,12 +110,6 @@ export async function getSetupState() {
   state.telegram.operational = state.telegram.skipped
 
   if (state.provider.selected) {
-    const apiKeyState = providerApiKeyState(env, state.provider.selected)
-    state.provider.apiKeyConfigured = apiKeyState.configured
-    state.provider.maskedApiKey = apiKeyState.masked
-    state.provider.authEnvVar = apiKeyState.envVar
-    state.provider.authInputLabel = apiKeyState.label
-
     try {
       const installResult = await runProviderScript('status', state.provider.selected)
       state.provider.installed = installResult.code === 0
@@ -120,8 +117,7 @@ export async function getSetupState() {
 
       if (state.provider.installed) {
         const authResult = await runProviderScript('auth-status', state.provider.selected)
-        state.provider.authenticated = authResult.code === 0
-        state.provider.authStatus = compact(authResult.stdout || authResult.stderr || 'not authenticated')
+        Object.assign(state.provider, parseProviderAuthState(authResult))
       } else {
         state.provider.authStatus = 'provider not installed'
       }

@@ -1,105 +1,109 @@
 # AgentGLS
 
-AgentGLS is a single-VPS agent system built around the provider-neutral GoalLoop v6 architecture.
+AgentGLS is a single-VPS autonomous operations system for running goal-driven work through either Claude Code or OpenAI Codex. It combines a browser-based setup flow, a provider-backed execution loop, a Telegram bridge, and a lightweight dashboard so one operator can install, supervise, and steer the system from a single host.
 
-## Status
+## What AgentGLS Does
 
-- Target architecture: [goalloop-design.md](./goalloop-design.md)
-- Implementation plan: [PLAN.md](./PLAN.md)
-- Canonical repo instructions: [AGENTS.md](./AGENTS.md)
-- Claude compatibility shim: [CLAUDE.md](./CLAUDE.md)
-- Runtime defaults:
-  - `/opt/agentgls`
-  - `agentgls`
-  - `agentgls-*`
-  - `cc_*`
-  - `AGENTGLS_*`
+- Runs one active coding/runtime provider at a time: `claude` or `codex`
+- Executes headless, resumable turns for human requests, GoalLoop heartbeats, scheduled jobs, and summaries
+- Exposes a local dashboard on port `3000` with onboarding, status, goals, secrets, and a live terminal
+- Proxies the dashboard and terminal websocket through Caddy when a public host is configured
+- Uses Telegram Bot API for operator access without tying the runtime to a provider-specific plugin
+- Keeps goals file-first under `/opt/agentgls/goals`, with PostgreSQL/PostgREST used for dashboard projection and system data
 
-## What This Repo Contains
+## Architecture
 
-- `bootstrap.sh` for VPS installation and updates
-- `dashboard/` for the web dashboard
-- `terminal/` for the web terminal bridge
-- `scripts/` for automation, health, security, and runtime helpers
-- `supabase/` for database migrations
-- `goalloop-design.md` and `PLAN.md` for the AgentGLS migration target
+AgentGLS installs onto a single Ubuntu or Debian VPS and runs the host stack locally:
 
-## Install
+- Next.js dashboard on `localhost:3000`
+- Terminal websocket bridge on `localhost:3002`
+- PostgreSQL and PostgREST in Docker
+- Caddy for HTTPS and reverse proxying
+- Provider runner scripts for Claude Code and Codex
+- Telegram bridge for inbound and outbound operator messaging
 
-Run the bootstrap installer on the VPS:
+The runtime is organized around isolated working directories under `/opt/agentgls/runtime/`:
+
+- `human/` for operator conversations
+- `goalloop/` for autonomous goal execution
+- `scheduled/` for scheduled tasks
+- `summary/` for summaries and one-shot reporting
+
+## Quick Start
+
+Run the bootstrap installer on a fresh VPS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/bootstrap.sh)"
 ```
 
-Bootstrap now does the host installation only:
+Bootstrap installs the base system and leaves the rest of setup to the dashboard onboarding flow. The installer prepares:
 
-- installs Docker, Caddy, Node.js, Claude Code, Codex CLI, and the local services
-- writes the AgentGLS runtime configuration
-- creates `/opt/agentgls/runtime/{human,goalloop,scheduled,summary}`
-- applies SQL migrations after PostgreSQL and PostgREST start
-- installs cron jobs for watchdog, GoalLoop, summaries, and projection sync
-- exposes the dashboard immediately on `VPS_IP:3000`
+- Docker, Node.js, Caddy, and host dependencies
+- the AgentGLS runtime under `/opt/agentgls`
+- PostgreSQL, PostgREST, dashboard, and terminal services
+- provider CLIs for Claude Code and Codex
+- runtime directories, cron jobs, and supporting scripts
 
-The normal operator flow is now:
+After bootstrap completes:
 
-1. SSH into the VPS and run the bootstrap installer.
-2. Open `http://VPS_IP:3000`.
-3. Complete admin setup, provider choice, provider auth, domain, Telegram token, business context, and first goal in the browser.
+1. Open `http://VPS_IP:3000`
+2. Create the admin account
+3. Choose the active provider
+4. Authenticate that provider in the embedded terminal
+5. Configure the public dashboard host if you want HTTPS
+6. Add the Telegram bot token
+7. Enter business context and the first goal
 
-For unattended installs or recovery, environment-variable overrides remain available:
+## Unattended Install Overrides
+
+Bootstrap also accepts environment-variable overrides for recovery workflows, automation, or partially preseeded installs:
 
 ```bash
 AGENTGLS_PROVIDER=codex \
-AGENTGLS_DOMAIN=example.com \
+AGENTGLS_DASHBOARD_HOST=dashboard.example.com \
 AGENTGLS_ADMIN_EMAIL=ops@example.com \
 AGENTGLS_DASHBOARD_PASSWORD=yourpassword \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/hcthisen/AgentGLS/main/bootstrap.sh)"
 ```
 
-Bootstrap installs both provider CLIs up front. If you ever need to rerun either install manually on the VPS:
+Important runtime values:
 
-```bash
-sudo -u agentgls /opt/agentgls/scripts/install-provider.sh install claude
-sudo -u agentgls /opt/agentgls/scripts/install-provider.sh install codex
-```
+- `AGENTGLS_DASHBOARD_HOST` sets the exact public host used by onboarding, DNS checks, and Caddy
+- `AGENTGLS_PROVIDER` selects the active runtime
+- `AGENTGLS_ADMIN_EMAIL` and `AGENTGLS_DASHBOARD_PASSWORD` preseed dashboard login
 
-## Provider Auth
+## Provider Authentication
 
-AgentGLS supports one active runtime at a time:
-
-- `claude`
-- `codex`
-
-Bootstrap installs both CLIs, and onboarding chooses the active runtime and guides auth through the web terminal.
+AgentGLS installs both provider CLIs during bootstrap and lets onboarding choose the active one. Authentication is handled through the provider CLI itself in the embedded terminal.
 
 ### Claude Code
 
-- Install path on Linux host: the official Claude Code installer (`curl -fsSL https://claude.ai/install.sh | bash`)
-- Check auth: `claude auth status`
-- Authenticate on the VPS: `claude auth login --claudeai`
+- Install path: official Claude Code installer
+- Login command: `claude auth login --claudeai`
+- Status command: `claude auth status --json`
 
 ### OpenAI Codex
 
-- Install path on Linux host: the official Codex CLI npm package (`npm install -g @openai/codex`)
-- Check auth: `codex login status`
-- Authenticate on a remote/headless VPS: `codex login --device-auth`
+- Install path: `npm install -g @openai/codex`
+- Login command: `codex login --device-auth`
+- Status command: `codex login status`
 
-Device auth is the recommended Codex path for remote VPS installs because it does not depend on a local browser session on the server itself.
+The onboarding flow is built around CLI login status, not API-key entry.
 
-## Telegram Bot API Setup
+## Telegram Setup
 
-Telegram is now provider-neutral. The runtime uses the Bot API bridge in this repo instead of the old Claude Telegram plugin path.
+AgentGLS uses a provider-neutral Telegram Bot API bridge.
 
 1. Create a bot with `@BotFather`
-2. Store the token during onboarding or with:
+2. Enter the bot token during onboarding, or run:
 
 ```bash
 sudo -u agentgls /opt/agentgls/scripts/telegram-setup.sh
 ```
 
 3. Send a message to the bot from your operator account
-4. Approve the pairing code with `python3 /opt/agentgls/scripts/telegram-bridge.py pair <CODE>`
+4. Approve the pairing code when prompted
 
 Useful bridge commands:
 
@@ -112,9 +116,7 @@ tail -f /opt/agentgls/logs/telegram-bridge.log
 
 ## Operations
 
-The runtime no longer depends on a permanently running Claude or Codex UI inside tmux. Human chat, GoalLoop heartbeats, scheduled tasks, and summaries all execute as resumable headless turns through `scripts/provider-run.sh`.
-
-Useful commands:
+Useful day-to-day commands on the VPS:
 
 ```bash
 bash /opt/agentgls/scripts/status.sh
@@ -125,17 +127,27 @@ tail -f /opt/agentgls/logs/goalloop-sync.log
 python3 -m unittest discover -s /opt/agentgls/tests
 ```
 
-The `agent` tmux session is the human-facing operational shell. The `goalloop` tmux session is the autonomous GoalLoop shell where heartbeat turns are injected for operator visibility.
+The two tmux sessions are operational shells:
 
-## Migration Note
+- `agent` is the human-facing shell
+- `goalloop` is the autonomous execution shell
 
-Older installs that used the Claude Telegram plugin should migrate to the Bot API bridge in this repo. That plugin is no longer part of the required AgentGLS runtime path.
+## Repository Layout
 
-## Project Notes
+- `bootstrap.sh` installs and updates the host stack
+- `dashboard/` contains the Next.js dashboard
+- `terminal/` contains the terminal websocket bridge
+- `scripts/` contains provider adapters, GoalLoop runtime scripts, Telegram tooling, and host utilities
+- `supabase/` contains SQL migrations
+- `tests/` contains regression tests for the runtime helpers
+- `config/` contains runtime templates and supporting configuration
 
-- `AGENTS.md` is the canonical repo instruction file.
-- `CLAUDE.md` exists only for Claude compatibility and should stay thin.
-- The active migration should move the system toward provider-neutral runtime behavior rather than deepen the legacy Claude plugin architecture.
+## Documentation
+
+- [goalloop-design.md](./goalloop-design.md) describes the runtime model and system behavior
+- [PLAN.md](./PLAN.md) tracks the implementation plan
+- [AGENTS.md](./AGENTS.md) is the canonical repo instruction file for coding agents working in this repo
+- [Architecture.md](./Architecture.md) contains additional implementation notes
 
 ## License
 

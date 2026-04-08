@@ -63,6 +63,19 @@ provider_api_key_present() {
   [[ -n "${!key_var:-}" ]]
 }
 
+print_auth_payload() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+    "status": sys.argv[1],
+    "mode": sys.argv[2],
+    "message": sys.argv[3],
+}))
+PY
+}
+
 is_installed() {
   command -v "$(provider_bin "$1")" >/dev/null 2>&1
 }
@@ -97,23 +110,102 @@ print_status() {
 
 print_auth_status() {
   local provider="$1"
+  local status_output
+  local status_code
+  local parsed
 
   if ! is_installed "$provider"; then
-    echo "missing"
+    print_auth_payload "missing" "missing" "Provider CLI is not installed"
     return 1
   fi
 
   if provider_api_key_present "$provider"; then
-    echo "api key configured"
-    return 0
+    case "$provider" in
+      claude)
+        print_auth_payload "warning" "api-key" "ANTHROPIC_API_KEY is set. Remove it and sign in with Claude subscription."
+        ;;
+      codex)
+        print_auth_payload "warning" "api-key" "OPENAI_API_KEY is set. Remove it and sign in with ChatGPT or device auth."
+        ;;
+    esac
+    return 2
   fi
 
   case "$provider" in
     claude)
-      claude auth status
+      status_output="$(claude auth status --json 2>&1)" || status_code=$?
+      status_code="${status_code:-0}"
+      parsed="$(python3 - "$status_output" <<'PY'
+import json
+import sys
+
+raw = sys.argv[1]
+try:
+    payload = json.loads(raw)
+except Exception:
+    print(json.dumps({
+        "status": "missing",
+        "mode": "logged-out",
+        "message": raw.strip() or "Claude is not authenticated",
+    }))
+    sys.exit(0)
+
+if payload.get("loggedIn") and payload.get("authMethod") == "claude.ai":
+    email = payload.get("email") or "subscription account"
+    print(json.dumps({
+        "status": "authenticated",
+        "mode": "subscription",
+        "message": f"Logged in with Claude subscription as {email}",
+    }))
+elif payload.get("loggedIn"):
+    method = payload.get("authMethod") or "unknown"
+    print(json.dumps({
+        "status": "warning",
+        "mode": method,
+        "message": f"Logged in with {method}. Onboarding requires Claude subscription login (--claudeai).",
+    }))
+else:
+    print(json.dumps({
+        "status": "missing",
+        "mode": "logged-out",
+        "message": "Claude is not authenticated",
+    }))
+PY
+)"
+      printf '%s\n' "$parsed"
+      case "$status_code" in
+        0)
+          if printf '%s' "$parsed" | grep -q '"status": "authenticated"'; then
+            return 0
+          fi
+          return 2
+          ;;
+        *)
+          return 1
+          ;;
+      esac
       ;;
     codex)
-      codex login status
+      status_output="$(codex login status 2>&1)" || status_code=$?
+      status_code="${status_code:-0}"
+
+      if [[ "$status_output" =~ [Cc]hat[Gg][Pp][Tt] ]]; then
+        print_auth_payload "authenticated" "subscription" "$(printf '%s' "$status_output" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+        return 0
+      fi
+
+      if [[ "$status_output" =~ [Aa][Pp][Ii][[:space:]-]?[Kk]ey ]]; then
+        print_auth_payload "warning" "api-key" "Codex is using API-key auth. Onboarding requires ChatGPT login or device auth."
+        return 2
+      fi
+
+      if [[ "$status_code" -eq 0 ]]; then
+        print_auth_payload "warning" "unknown" "$(printf '%s' "$status_output" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+        return 2
+      fi
+
+      print_auth_payload "missing" "logged-out" "$(printf '%s' "$status_output" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+      return 1
       ;;
   esac
 }

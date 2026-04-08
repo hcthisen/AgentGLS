@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import TerminalPane from './TerminalPane'
 
 const STEP_ORDER = ['admin', 'provider', 'domain', 'telegram', 'context', 'launch']
 
@@ -12,12 +13,12 @@ const STEP_META = {
   provider: {
     label: 'Runtime',
     title: 'Choose and authorize the active provider',
-    blurb: 'Bootstrap installs both CLIs. Choose the active runtime, optionally add its API key, and run a live check from the browser.',
+    blurb: 'Bootstrap installs both CLIs. Choose the active runtime, sign in through the embedded terminal, and verify it with a live check.',
   },
   domain: {
     label: 'Domain',
-    title: 'Attach a domain or keep the raw IP',
-    blurb: 'Use DNS + Caddy for TLS, or skip and keep onboarding on the VPS address for now.',
+    title: 'Attach the public dashboard host or keep the raw IP',
+    blurb: 'Use the exact hostname you want operators to open, then let AgentGLS validate DNS and wire Caddy for TLS.',
   },
   telegram: {
     label: 'Telegram',
@@ -108,21 +109,27 @@ function formatTimestamp(value) {
 function providerAuthMeta(provider) {
   if (provider === 'claude') {
     return {
-      envVar: 'ANTHROPIC_API_KEY',
-      label: 'Anthropic API key',
+      authLabel: 'Claude subscription login',
+      command: 'claude auth login --claudeai',
+      statusCommand: 'claude auth status --json',
+      intro: 'Claude Code should use the Claude subscription flow. It opens a browser-based login from the VPS terminal session.',
     }
   }
 
   if (provider === 'codex') {
     return {
-      envVar: 'OPENAI_API_KEY',
-      label: 'OpenAI API key',
+      authLabel: 'ChatGPT / device auth',
+      command: 'codex login --device-auth',
+      statusCommand: 'codex login status',
+      intro: 'Codex should use ChatGPT subscription access. Device auth is the recommended path for remote or headless VPS installs.',
     }
   }
 
   return {
-    envVar: '',
-    label: 'Provider API key',
+    authLabel: 'Provider login',
+    command: '',
+    statusCommand: '',
+    intro: '',
   }
 }
 
@@ -268,7 +275,6 @@ export default function SetupWizard({
   const [adminPassword, setAdminPassword] = useState('')
   const [provider, setProvider] = useState(setupState?.provider?.selected || 'claude')
   const [providerDirty, setProviderDirty] = useState(false)
-  const [providerApiKey, setProviderApiKey] = useState('')
   const [providerProbe, setProviderProbe] = useState(null)
   const [domain, setDomain] = useState(setupState?.domain?.value || '')
   const [domainResult, setDomainResult] = useState(null)
@@ -294,7 +300,6 @@ export default function SetupWizard({
 
   useEffect(() => {
     setProviderProbe(null)
-    setProviderApiKey('')
   }, [provider])
 
   const steps = buildSteps(setupState)
@@ -305,7 +310,6 @@ export default function SetupWizard({
   const savedProvider = setupState?.provider?.selected || ''
   const providerSaved = provider === savedProvider
   const currentProviderMeta = providerAuthMeta(provider)
-  const providerApiKeyConfigured = providerSaved && Boolean(setupState?.provider?.apiKeyConfigured)
   const providerInstallStatus = providerSaved
     ? setupState?.provider?.installStatus || 'pending'
     : savedProvider
@@ -313,7 +317,7 @@ export default function SetupWizard({
       : 'save this provider to continue'
   const providerAuthStatus = providerSaved
     ? setupState?.provider?.authStatus || 'pending'
-    : 'save this provider to unlock browser-based authorization'
+    : 'save this provider to unlock terminal-based authorization'
 
   async function refreshSetupState(notify = false) {
     setBusyAction('refresh_setup')
@@ -368,9 +372,6 @@ export default function SetupWizard({
       }
       if (options.clearAdminPassword) {
         setAdminPassword('')
-      }
-      if (options.clearProviderApiKey) {
-        setProviderApiKey('')
       }
       if (options.clearTelegramToken) {
         setTelegramToken('')
@@ -431,7 +432,7 @@ export default function SetupWizard({
       const res = await fetch('/api/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'check_domain', domain }),
+        body: JSON.stringify({ action: 'check_domain', host: domain }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -526,7 +527,7 @@ export default function SetupWizard({
                 label="Domain"
                 value={
                   setupState?.domain?.configured
-                    ? `dashboard.${setupState.domain.value}`
+                    ? setupState.domain.value
                     : setupState?.domain?.skipped
                       ? 'skipped'
                       : 'raw IP'
@@ -669,31 +670,35 @@ export default function SetupWizard({
                     Auth status: <code>{providerAuthStatus}</code>
                   </div>
                   <div>
-                    Auth input: <code>{currentProviderMeta.envVar || 'select a provider first'}</code>
+                    Current auth mode:{' '}
+                    <code>{providerSaved ? setupState?.provider?.authMode || 'unknown' : 'save to inspect'}</code>
+                  </div>
+                  <div>
+                    Expected auth: <code>{currentProviderMeta.authLabel || 'select a provider first'}</code>
+                  </div>
+                  <div>
+                    Status check: <code>{currentProviderMeta.statusCommand || '-'}</code>
                   </div>
                 </div>
                 {!providerSaved && (
                   <div className="setup-banner warn">
-                    Save this provider as active first. Then the browser-based auth field and live check will target it.
+                    Save this provider as active first. Then the embedded terminal and live check will target it.
                   </div>
                 )}
-                <input
-                  type="password"
-                  disabled={!providerSaved}
-                  placeholder={
-                    providerApiKeyConfigured
-                      ? `${setupState.provider.authInputLabel} configured: ${setupState.provider.maskedApiKey}`
-                      : currentProviderMeta.label
-                  }
-                  value={providerApiKey}
-                  onChange={(event) => setProviderApiKey(event.target.value)}
-                />
                 <div className="setup-copy">
-                  This follows the Paperclip pattern: save the active provider, authorize it here from the browser with an API key, and verify it with a live hello probe.
+                  {currentProviderMeta.intro}
                 </div>
                 <div className="setup-copy">
-                  The onboarding flow does not need an embedded terminal for provider authorization. If you later use CLI login on the host, come back here and rerun the live check.
+                  Save the provider, run the login command below in the terminal, then refresh the runtime status and rerun the live hello probe.
                 </div>
+                <div className="setup-detail">
+                  <div>
+                    Login command: <code>{currentProviderMeta.command || 'save a provider first'}</code>
+                  </div>
+                </div>
+                {providerSaved && setupState?.provider?.authWarning && (
+                  <div className="setup-banner warn">{setupState.provider.authWarning}</div>
+                )}
                 <div className="form-actions">
                   <button
                     type="button"
@@ -712,31 +717,10 @@ export default function SetupWizard({
                   <button
                     type="button"
                     className="btn-sm"
-                    disabled={
-                      busyAction === 'set_provider_auth' ||
-                      !providerSaved ||
-                      (!providerApiKey.trim() && !providerApiKeyConfigured)
-                    }
-                    onClick={() =>
-                      executeSetupAction(
-                        'set_provider_auth',
-                        { provider, apiKey: providerApiKey },
-                        {
-                          clearProviderApiKey: true,
-                          successMessage: providerApiKey
-                            ? `${currentProviderMeta.label} saved`
-                            : 'Provider API key cleared',
-                        }
-                      )
-                    }
+                    disabled={busyAction === 'refresh_setup'}
+                    onClick={() => refreshSetupState(true)}
                   >
-                    {busyAction === 'set_provider_auth'
-                      ? 'saving key...'
-                      : providerApiKey
-                        ? 'save API key'
-                        : providerApiKeyConfigured
-                          ? 'clear saved key'
-                          : 'save API key'}
+                    {busyAction === 'refresh_setup' ? 'refreshing...' : 'refresh auth status'}
                   </button>
                   <button
                     type="button"
@@ -747,6 +731,17 @@ export default function SetupWizard({
                     {busyAction === 'probe_provider' ? 'checking...' : 'run live check'}
                   </button>
                 </div>
+                {providerSaved && (
+                  <div className="embedded-terminal">
+                    <div className="setup-subtitle">Embedded terminal</div>
+                    <div className="setup-copy">
+                      Run <code>{currentProviderMeta.command}</code> here. When the login finishes, use
+                      refresh auth status above to reload the provider state.
+                    </div>
+                    <pre className="setup-command"><code>{currentProviderMeta.command}</code></pre>
+                    <TerminalPane />
+                  </div>
+                )}
                 <ProviderProbeResult result={providerProbe} />
               </>
             )}
@@ -755,19 +750,19 @@ export default function SetupWizard({
               <>
                 <input
                   type="text"
-                  placeholder="example.com"
+                  placeholder="dashboard.example.com"
                   value={domain}
                   onChange={(event) => setDomain(event.target.value)}
                 />
                 <div className="setup-copy">
-                  Save the root domain and AgentGLS will configure <code>dashboard.&lt;domain&gt;</code>{' '}
-                  for the dashboard. Skip this if you want to keep using the raw IP during bring-up.
+                  Save the exact public hostname you want to use for the dashboard and terminal
+                  websocket. Skip this if you want to keep using the raw IP during bring-up.
                 </div>
                 {domainResult && (
                   <div className={`setup-banner ${domainResult.matches ? 'ok' : 'warn'}`}>
                     {domainResult.matches
-                      ? `${domainResult.domain} resolves to ${domainResult.expectedIp}`
-                      : `${domainResult.domain} resolves to ${domainResult.addresses.join(', ') || 'nothing yet'}; expected ${domainResult.expectedIp}`}
+                      ? `${domainResult.host} resolves to ${domainResult.expectedIp}`
+                      : `${domainResult.host} resolves to ${domainResult.addresses.join(', ') || 'nothing yet'}; expected ${domainResult.expectedIp}`}
                   </div>
                 )}
                 <div className="form-actions">
@@ -786,12 +781,12 @@ export default function SetupWizard({
                     onClick={() =>
                       executeSetupAction(
                         'set_domain',
-                        { domain },
-                        { clearDomainResult: true, successMessage: 'Domain saved' }
+                        { host: domain },
+                        { clearDomainResult: true, successMessage: 'Dashboard host saved' }
                       )
                     }
                   >
-                    {busyAction === 'set_domain' ? 'saving...' : 'save domain'}
+                    {busyAction === 'set_domain' ? 'saving...' : 'save host'}
                   </button>
                   <button
                     type="button"
@@ -1000,7 +995,7 @@ export default function SetupWizard({
                     label="Domain"
                     value={
                       setupState?.domain?.configured
-                        ? `dashboard.${setupState.domain.value}`
+                        ? setupState.domain.value
                         : setupState?.domain?.skipped
                           ? 'skipped'
                           : 'pending'

@@ -20,13 +20,27 @@ error()   { echo -e "${RED}[ERR]${NC}  $*" >&2; }
 step()    { echo -e "\n${GREEN}>>>${NC} $*"; }
 
 OVERRIDE_AGENTGLS_DOMAIN="${AGENTGLS_DOMAIN:-}"
+OVERRIDE_AGENTGLS_DASHBOARD_HOST="${AGENTGLS_DASHBOARD_HOST:-}"
 OVERRIDE_AGENTGLS_PROVIDER="${AGENTGLS_PROVIDER:-}"
 OVERRIDE_ADMIN_NAME="${AGENTGLS_ADMIN_NAME:-}"
 OVERRIDE_ADMIN_EMAIL="${AGENTGLS_ADMIN_EMAIL:-}"
 OVERRIDE_DASHBOARD_PASSWORD="${AGENTGLS_DASHBOARD_PASSWORD:-}"
-OVERRIDE_ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
-OVERRIDE_OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OVERRIDE_TELEGRAM_TOKEN="${TELEGRAM_BOT_TOKEN:-${AGENTGLS_TELEGRAM_TOKEN:-}}"
+
+derive_dashboard_host_from_domain() {
+  local domain="${1:-}"
+  if [[ -z "$domain" ]]; then
+    return 0
+  fi
+  printf 'dashboard.%s\n' "$domain"
+}
+
+derive_legacy_domain_from_host() {
+  local host="${1:-}"
+  if [[ "$host" == dashboard.* ]]; then
+    printf '%s\n' "${host#dashboard.}"
+  fi
+}
 
 check_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -187,14 +201,19 @@ prepare_config() {
   load_existing_env
 
   AGENTGLS_DOMAIN="${OVERRIDE_AGENTGLS_DOMAIN:-${AGENTGLS_DOMAIN:-}}"
+  AGENTGLS_DASHBOARD_HOST="${OVERRIDE_AGENTGLS_DASHBOARD_HOST:-${AGENTGLS_DASHBOARD_HOST:-}}"
   AGENTGLS_PROVIDER="${OVERRIDE_AGENTGLS_PROVIDER:-${AGENTGLS_PROVIDER:-}}"
   AGENTGLS_ADMIN_NAME="${OVERRIDE_ADMIN_NAME:-${AGENTGLS_ADMIN_NAME:-}}"
   AGENTGLS_ADMIN_EMAIL="${OVERRIDE_ADMIN_EMAIL:-${AGENTGLS_ADMIN_EMAIL:-}}"
-  ANTHROPIC_API_KEY="${OVERRIDE_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY:-}}"
-  OPENAI_API_KEY="${OVERRIDE_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
   TELEGRAM_BOT_TOKEN="${OVERRIDE_TELEGRAM_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
   AGENTGLS_DOMAIN_SKIPPED="${AGENTGLS_DOMAIN_SKIPPED:-0}"
   AGENTGLS_TELEGRAM_SKIPPED="${AGENTGLS_TELEGRAM_SKIPPED:-0}"
+
+  if [[ -z "${AGENTGLS_DASHBOARD_HOST:-}" && -n "${AGENTGLS_DOMAIN:-}" ]]; then
+    AGENTGLS_DASHBOARD_HOST="$(derive_dashboard_host_from_domain "$AGENTGLS_DOMAIN")"
+  fi
+
+  AGENTGLS_DOMAIN="$(derive_legacy_domain_from_host "${AGENTGLS_DASHBOARD_HOST:-}")"
 
   if [[ -n "$OVERRIDE_DASHBOARD_PASSWORD" ]]; then
     DASHBOARD_PASSWORD_HASH="$(echo -n "$OVERRIDE_DASHBOARD_PASSWORD" | sha256sum | awk '{print $1}')"
@@ -215,14 +234,13 @@ write_env() {
   admin_name_escaped="${admin_name_escaped//\"/\\\"}"
 
   cat > "$INSTALL_DIR/.env" <<EOF
+AGENTGLS_DASHBOARD_HOST=${AGENTGLS_DASHBOARD_HOST}
 AGENTGLS_DOMAIN=${AGENTGLS_DOMAIN}
 AGENTGLS_PROVIDER=${AGENTGLS_PROVIDER}
 AGENTGLS_ADMIN_NAME="${admin_name_escaped}"
 AGENTGLS_ADMIN_EMAIL=${AGENTGLS_ADMIN_EMAIL}
 AGENTGLS_DOMAIN_SKIPPED=${AGENTGLS_DOMAIN_SKIPPED}
 AGENTGLS_TELEGRAM_SKIPPED=${AGENTGLS_TELEGRAM_SKIPPED}
-ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-OPENAI_API_KEY=${OPENAI_API_KEY}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 JWT_SECRET=${JWT_SECRET}
@@ -391,21 +409,52 @@ build_dashboard() {
 }
 
 configure_caddy_if_requested() {
-  if [[ -z "${AGENTGLS_DOMAIN:-}" ]]; then
-    info "No domain provided during bootstrap; onboarding will handle domain configuration later"
+  if [[ -z "${AGENTGLS_DASHBOARD_HOST:-}" ]]; then
+    info "No dashboard host provided during bootstrap; onboarding will handle domain configuration later"
     return
   fi
 
-  step "Configuring Caddy for dashboard.${AGENTGLS_DOMAIN}..."
-  cat > /etc/caddy/Caddyfile <<EOF
-dashboard.${AGENTGLS_DOMAIN} {
-	reverse_proxy /ws/terminal localhost:3002
-	reverse_proxy localhost:3000
-}
-EOF
+  step "Configuring Caddy for ${AGENTGLS_DASHBOARD_HOST}..."
+  python3 - "${AGENTGLS_DASHBOARD_HOST}" <<'PY'
+from pathlib import Path
+import sys
 
-  systemctl enable caddy --now 2>/dev/null || true
-  systemctl reload caddy 2>/dev/null || caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || true
+host = sys.argv[1].strip()
+begin = "# AGENTGLS MANAGED BEGIN"
+end = "# AGENTGLS MANAGED END"
+block = (
+    f"{begin}\n"
+    f"{host} {{\n"
+    "\treverse_proxy /ws/terminal localhost:3002\n"
+    "\treverse_proxy localhost:3000\n"
+    "}\n"
+    f"{end}\n"
+)
+
+path = Path("/etc/caddy/Caddyfile")
+existing = path.read_text(encoding="utf-8") if path.exists() else ""
+if begin in existing and end in existing:
+    start = existing.index(begin)
+    finish = existing.index(end, start) + len(end)
+    updated = f"{existing[:start].rstrip()}\n\n{block}\n{existing[finish:].lstrip()}"
+elif existing.strip():
+    updated = f"{existing.rstrip()}\n\n{block}"
+else:
+    updated = block
+path.write_text(updated.rstrip() + "\n", encoding="utf-8")
+PY
+
+  caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1
+  if ! systemctl enable caddy --now >/dev/null 2>&1; then
+    error "Failed to start Caddy"
+    exit 1
+  fi
+  if ! systemctl reload caddy >/dev/null 2>&1; then
+    if ! caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+      error "Failed to reload Caddy"
+      exit 1
+    fi
+  fi
   success "Caddy configured"
 }
 
@@ -468,8 +517,8 @@ print_banner() {
   echo -e "${GREEN}============================================${NC}"
   echo ""
   echo -e "  Dashboard: ${BLUE}http://${server_ip}:3000${NC}"
-  if [[ -n "${AGENTGLS_DOMAIN:-}" ]]; then
-    echo -e "  Domain:    ${BLUE}https://dashboard.${AGENTGLS_DOMAIN}${NC}"
+  if [[ -n "${AGENTGLS_DASHBOARD_HOST:-}" ]]; then
+    echo -e "  Domain:    ${BLUE}https://${AGENTGLS_DASHBOARD_HOST}${NC}"
   fi
   echo ""
   echo -e "  ${YELLOW}Next steps:${NC}"

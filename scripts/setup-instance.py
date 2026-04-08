@@ -26,14 +26,13 @@ RUNBOOK_PATH = GOALS_DIR / "_runbook.md"
 CONTEXT_PATH = GOALS_DIR / "_context.md"
 
 ENV_ORDER = [
+    "AGENTGLS_DASHBOARD_HOST",
     "AGENTGLS_DOMAIN",
     "AGENTGLS_PROVIDER",
     "AGENTGLS_ADMIN_NAME",
     "AGENTGLS_ADMIN_EMAIL",
     "AGENTGLS_DOMAIN_SKIPPED",
     "AGENTGLS_TELEGRAM_SKIPPED",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
     "TELEGRAM_BOT_TOKEN",
     "POSTGRES_PASSWORD",
     "JWT_SECRET",
@@ -74,6 +73,9 @@ def encode_env_value(value: str) -> str:
 
 
 def write_env(env: OrderedDict[str, str]) -> None:
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("OPENAI_API_KEY", None)
+
     ordered = OrderedDict()
     for key in ENV_ORDER:
         if key in env:
@@ -122,6 +124,26 @@ def slugify(value: str) -> str:
     return slug or "goal"
 
 
+def configured_dashboard_host(env: OrderedDict[str, str]) -> str:
+    host = str(env.get("AGENTGLS_DASHBOARD_HOST", "")).strip().lower()
+    if host:
+        return host
+
+    legacy_domain = str(env.get("AGENTGLS_DOMAIN", "")).strip().lower()
+    if legacy_domain:
+        return f"dashboard.{legacy_domain}"
+
+    return ""
+
+
+def derive_legacy_domain_from_host(host: str) -> str:
+    normalized = host.strip().lower()
+    prefix = "dashboard."
+    if normalized.startswith(prefix) and len(normalized) > len(prefix):
+        return normalized[len(prefix):]
+    return ""
+
+
 def find_first_goal() -> Path | None:
     if not ACTIVE_GOALS_DIR.exists():
         return None
@@ -159,34 +181,19 @@ def set_provider() -> None:
     env["AGENTGLS_PROVIDER"] = provider
     write_env(env)
 
-
-def set_provider_auth() -> None:
-    data = read_json_stdin()
-    provider = str(data.get("provider", "")).strip()
-    api_key = str(data.get("api_key", "")).strip()
-
-    if provider not in {"claude", "codex"}:
-        raise SystemExit("provider must be claude or codex")
-
-    env = load_env()
-    if provider == "claude":
-        env["ANTHROPIC_API_KEY"] = api_key
-    else:
-        env["OPENAI_API_KEY"] = api_key
-    write_env(env)
-
-
 def set_domain() -> None:
     data = read_json_stdin()
     skip = bool(data.get("skip"))
-    domain = str(data.get("domain", "")).strip().lower()
+    host = str(data.get("host") or data.get("domain") or "").strip().lower()
 
     env = load_env()
-    if skip or not domain:
+    if skip or not host:
+        env["AGENTGLS_DASHBOARD_HOST"] = ""
         env["AGENTGLS_DOMAIN"] = ""
         env["AGENTGLS_DOMAIN_SKIPPED"] = "1"
     else:
-        env["AGENTGLS_DOMAIN"] = domain
+        env["AGENTGLS_DASHBOARD_HOST"] = host
+        env["AGENTGLS_DOMAIN"] = derive_legacy_domain_from_host(host)
         env["AGENTGLS_DOMAIN_SKIPPED"] = "0"
     write_env(env)
 
@@ -288,6 +295,7 @@ def status() -> None:
         "adminEmail": env.get("AGENTGLS_ADMIN_EMAIL", ""),
         "adminName": env.get("AGENTGLS_ADMIN_NAME", ""),
         "provider": env.get("AGENTGLS_PROVIDER", ""),
+        "dashboardHost": configured_dashboard_host(env),
         "domain": env.get("AGENTGLS_DOMAIN", ""),
         "domainSkipped": env.get("AGENTGLS_DOMAIN_SKIPPED", "0") == "1",
         "telegramConfigured": bool(env.get("TELEGRAM_BOT_TOKEN")),
@@ -315,7 +323,6 @@ def main() -> None:
         choices=[
             "set-admin",
             "set-provider",
-            "set-provider-auth",
             "set-domain",
             "set-telegram",
             "write-context",
@@ -331,7 +338,6 @@ def main() -> None:
     actions = {
         "set-admin": set_admin,
         "set-provider": set_provider,
-        "set-provider-auth": set_provider_auth,
         "set-domain": set_domain,
         "set-telegram": set_telegram,
         "write-context": write_context,

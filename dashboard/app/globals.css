@@ -402,6 +402,19 @@ tr:hover td {
   word-break: break-word;
 }
 
+.setup-command {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--blue);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .setup-shell {
   display: grid;
   grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);

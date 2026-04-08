@@ -31,8 +31,8 @@ The GoalLoop system is generically deployable. The primary operator flow is:
 4. Complete the setup wizard:
    - **Admin account** — set email and password
    - **Provider** — choose `claude` or `codex` as the active runtime
-   - **Domain** — enter the domain for the dashboard. A "Check DNS" button verifies the A record points at the VPS. If it resolves, Caddy provisions TLS and the dashboard moves to `dashboard.domain.com`. If not, the system continues on the raw VPS IP.
-   - **Provider auth** — authenticate the selected provider (Claude: browser auth; Codex: device auth)
+   - **Domain** — enter the exact public hostname for the dashboard (for example `dashboard.example.com`). A "Check DNS" button verifies that hostname points at the VPS. If it resolves, Caddy provisions TLS for that host. If not, the system continues on the raw VPS IP.
+   - **Provider auth** — authenticate the selected provider in the embedded terminal (Claude: `claude auth login --claudeai`; Codex: `codex login --device-auth`)
    - **Telegram** — create a bot via BotFather, enter the token. The bridge handles pairing.
    - **Business context** — set the business name, describe what the business does and its current situation. This generates `_context.md`.
    - **Initial goal** — describe the first goal the system should work toward. This generates the first goal file in `goals/active/` with `brief_status: draft`.

@@ -153,12 +153,40 @@ export function stopTelegramBridge() {
 }
 
 export function configureCaddy(domain) {
-  const caddyfile = `dashboard.${domain} {\n\treverse_proxy /ws/terminal localhost:3002\n\treverse_proxy localhost:3000\n}\n`
+  const caddyfile = [
+    '# AGENTGLS MANAGED BEGIN',
+    `${domain} {`,
+    '\treverse_proxy /ws/terminal localhost:3002',
+    '\treverse_proxy localhost:3000',
+    '}',
+    '# AGENTGLS MANAGED END',
+    '',
+  ].join('\n')
   const script = [
     'sudo mkdir -p /etc/caddy',
-    `cat <<'EOF' | sudo tee /etc/caddy/Caddyfile >/dev/null\n${caddyfile}EOF`,
-    'sudo systemctl enable caddy --now >/dev/null 2>&1 || true',
-    'sudo systemctl reload caddy >/dev/null 2>&1 || sudo caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true',
+    `sudo python3 - ${shellQuote(domain)} <<'PY'
+from pathlib import Path
+import sys
+
+host = sys.argv[1].strip()
+begin = "# AGENTGLS MANAGED BEGIN"
+end = "# AGENTGLS MANAGED END"
+block = """${caddyfile}"""
+path = Path("/etc/caddy/Caddyfile")
+existing = path.read_text(encoding="utf-8") if path.exists() else ""
+if begin in existing and end in existing:
+    start = existing.index(begin)
+    finish = existing.index(end, start) + len(end)
+    updated = f"{existing[:start].rstrip()}\\n\\n{block}\\n{existing[finish:].lstrip()}"
+elif existing.strip():
+    updated = f"{existing.rstrip()}\\n\\n{block}"
+else:
+    updated = block
+path.write_text(updated.rstrip() + "\\n", encoding="utf-8")
+PY`,
+    'sudo caddy validate --config /etc/caddy/Caddyfile >/dev/null',
+    'if ! sudo systemctl enable caddy --now >/dev/null 2>&1; then echo "Failed to start Caddy" >&2; exit 1; fi',
+    'if ! sudo systemctl reload caddy >/dev/null 2>&1; then if ! sudo caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then echo "Failed to reload Caddy" >&2; exit 1; fi; fi',
   ].join('\n')
   return runHostCommand(script)
 }

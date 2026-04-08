@@ -1,4 +1,6 @@
-dashboard.{$AGENTGLS_DOMAIN} {
+# AGENTGLS MANAGED BEGIN
+{$AGENTGLS_DASHBOARD_HOST} {
 	reverse_proxy /ws/terminal localhost:3002
 	reverse_proxy localhost:3000
 }
+# AGENTGLS MANAGED END

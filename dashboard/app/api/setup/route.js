@@ -25,15 +25,16 @@ function compact(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function buildProviderProbe(provider, result, installed) {
+function buildProviderProbe(provider, result, providerState) {
   const stdout = String(result?.stdout || '').trim()
   const stderr = String(result?.stderr || '').trim()
   const detail = compact(stderr || stdout)
   const combined = `${stdout}\n${stderr}`.trim()
+  const installed = Boolean(providerState?.installed)
   const authHint =
     provider === 'claude'
-      ? 'Paste an Anthropic API key above or complete Claude CLI login on the host, then check again.'
-      : 'Paste an OpenAI API key above or complete Codex CLI login on the host, then check again.'
+      ? 'Run `claude auth login --claudeai` in the embedded terminal, then refresh and rerun the live check.'
+      : 'Run `codex login --device-auth` in the embedded terminal, then refresh and rerun the live check.'
 
   const checks = [
     {
@@ -45,6 +46,15 @@ function buildProviderProbe(provider, result, installed) {
     },
   ]
 
+  if (providerState?.authWarning) {
+    checks.push({
+      code: `${provider}_subscription_auth_required`,
+      level: 'warn',
+      message: providerState.authWarning,
+      hint: authHint,
+    })
+  }
+
   if ((result?.code ?? 1) === 0) {
     checks.push({
       code: `${provider}_hello_probe_passed`,
@@ -52,9 +62,19 @@ function buildProviderProbe(provider, result, installed) {
       message: `${provider} live check succeeded.`,
       detail: detail || 'Provider returned a successful response.',
     })
+
+    if (providerState?.authenticated) {
+      return {
+        adapterType: provider,
+        status: 'pass',
+        checks,
+        testedAt: new Date().toISOString(),
+      }
+    }
+
     return {
       adapterType: provider,
-      status: 'pass',
+      status: 'warn',
       checks,
       testedAt: new Date().toISOString(),
     }
@@ -104,6 +124,8 @@ function normalizeDomain(value) {
     .toLowerCase()
     .replace(/^https?:\/\//, '')
     .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/\.$/, '')
 }
 
 async function getPublicIp() {
@@ -172,19 +194,6 @@ export async function POST(request) {
       })
     }
 
-    if (action === 'set_provider_auth') {
-      const provider = String(body.provider || '').trim()
-      const apiKey = String(body.apiKey || '').trim()
-      if (!['claude', 'codex'].includes(provider)) {
-        return invalid('Provider must be claude or codex')
-      }
-
-      await runSetupAction('set-provider-auth', { provider, api_key: apiKey })
-      return setupResponse({
-        providerAuthMessage: apiKey ? `${provider} API key saved` : `${provider} API key cleared`,
-      })
-    }
-
     if (action === 'probe_provider') {
       const provider = String(body.provider || '').trim()
       if (!['claude', 'codex'].includes(provider)) {
@@ -192,28 +201,27 @@ export async function POST(request) {
       }
 
       const probeResult = await probeProviderScript(provider)
-      const installResult = await runProviderScript('status', provider)
       const state = await getSetupState()
       return NextResponse.json({
         ...state,
-        providerProbe: buildProviderProbe(provider, probeResult, installResult.code === 0),
+        providerProbe: buildProviderProbe(provider, probeResult, state.provider),
       })
     }
 
     if (action === 'check_domain') {
-      const domain = normalizeDomain(body.domain)
-      if (!domain) {
-        return invalid('Domain is required')
+      const host = normalizeDomain(body.host || body.domain)
+      if (!host) {
+        return invalid('Dashboard host is required')
       }
 
       const [expectedIp, addresses] = await Promise.all([
         getPublicIp(),
-        dns.resolve4(domain).catch(() => []),
+        dns.resolve4(host).catch(() => []),
       ])
 
       return NextResponse.json({
         ok: true,
-        domain,
+        host,
         expectedIp,
         addresses,
         matches: addresses.includes(expectedIp),
@@ -222,19 +230,19 @@ export async function POST(request) {
 
     if (action === 'set_domain') {
       const skip = Boolean(body.skip)
-      const domain = normalizeDomain(body.domain)
+      const host = normalizeDomain(body.host || body.domain)
 
-      if (!skip && !domain) {
-        return invalid('Domain is required unless skipped')
+      if (!skip && !host) {
+        return invalid('Dashboard host is required unless skipped')
       }
 
-      await runSetupAction('set-domain', skip ? { skip: true } : { domain })
+      await runSetupAction('set-domain', skip ? { skip: true } : { host })
 
       let caddyMessage = ''
-      if (!skip && domain) {
+      if (!skip && host) {
         try {
-          await configureCaddy(domain)
-          caddyMessage = `Caddy configured for dashboard.${domain}`
+          await configureCaddy(host)
+          caddyMessage = `Caddy configured for ${host}`
         } catch (error) {
           caddyMessage = error instanceof Error ? error.message : 'Failed to configure Caddy'
         }

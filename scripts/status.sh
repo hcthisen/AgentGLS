@@ -61,6 +61,11 @@ AGENTGLS_USER="${AGENTGLS_USER:-agentgls}"
 
 load_agentgls_env
 
+DASHBOARD_HOST="${AGENTGLS_DASHBOARD_HOST:-}"
+if [[ -z "$DASHBOARD_HOST" && -n "${AGENTGLS_DOMAIN:-}" ]]; then
+  DASHBOARD_HOST="dashboard.${AGENTGLS_DOMAIN}"
+fi
+
 echo ""
 echo "AgentGLS System Status"
 echo "======================"
@@ -146,11 +151,11 @@ echo ""
 echo "Access"
 echo "------"
 
-if [[ -n "${AGENTGLS_DOMAIN:-}" ]]; then
-  if curl -sfk "https://dashboard.${AGENTGLS_DOMAIN}" >/dev/null 2>&1; then
-    ok "Domain routing works: dashboard.${AGENTGLS_DOMAIN}"
+if [[ -n "$DASHBOARD_HOST" ]]; then
+  if curl -sfk "https://${DASHBOARD_HOST}" >/dev/null 2>&1; then
+    ok "Domain routing works: ${DASHBOARD_HOST}"
   else
-    warn "Domain configured but not reachable yet: dashboard.${AGENTGLS_DOMAIN}"
+    warn "Domain configured but not reachable yet: ${DASHBOARD_HOST}"
   fi
 else
   warn "No domain configured yet; use the onboarding flow on :3000"
