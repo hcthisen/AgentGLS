@@ -249,10 +249,35 @@ def extract_verification_url(value: str) -> str | None:
 
 
 def extract_codex_user_code(text: str) -> str | None:
+    multiline_patterns = [
+        re.compile(
+            r"(?:one-time code|device code|enter this code|enter this one-time code)[^\n]*\n\s*([A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:one-time code|device code|enter this code|enter this one-time code)[^\n]*\n\s*([A-Z0-9]{6,10})\b",
+            re.IGNORECASE,
+        ),
+    ]
+
+    for pattern in multiline_patterns:
+        match = pattern.search(text)
+        if match:
+            return match.group(1)
+
     for line in text.splitlines():
         trimmed = line.strip()
         if not trimmed:
             continue
+
+        standalone_hyphenated = re.fullmatch(r"[A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+", trimmed)
+        if standalone_hyphenated:
+            return standalone_hyphenated.group(0)
+
+        standalone_short = re.fullmatch(r"[A-Z0-9]{6,10}", trimmed)
+        if standalone_short:
+            return standalone_short.group(0)
+
         lowered = trimmed.lower()
         if "code" not in lowered:
             continue
