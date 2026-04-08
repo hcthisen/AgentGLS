@@ -50,6 +50,7 @@ export default function CompanyTab({ setupState, onSetupUpdate }) {
             Keep the business identity, offer, audience, channels, assets, constraints, and current priorities here.
           </div>
           <textarea
+            className="company-context-editor"
             rows={20}
             placeholder="Company name, what the business does, offer, audience, channels, operating constraints, assets, and what matters right now."
             value={contextText}

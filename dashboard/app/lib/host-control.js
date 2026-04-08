@@ -13,6 +13,7 @@ const OPERATOR_CHAT_PATH = `${HOST_INSTALL_DIR}/scripts/operator_chat.py`
 const TELEGRAM_BRIDGE_PATH = `${HOST_INSTALL_DIR}/scripts/telegram-bridge.py`
 const TELEGRAM_LOG_PATH = `${HOST_INSTALL_DIR}/logs/telegram-bridge.log`
 const GOALLOOP_SYNC_PATH = `${HOST_INSTALL_DIR}/scripts/goalloop-sync.sh`
+const GOALLOOP_HEARTBEAT_PATH = `${HOST_INSTALL_DIR}/scripts/goalloop-heartbeat.sh`
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
@@ -246,6 +247,108 @@ export function waitForHttpsHost(domain) {
 
 export function runGoalSync() {
   return runHostCommand(`bash ${shellQuote(GOALLOOP_SYNC_PATH)}`)
+}
+
+export async function getGoalloopRuntimeState() {
+  const script = [
+    `install_dir=${shellQuote(HOST_INSTALL_DIR)}`,
+    `python3 - "$install_dir" <<'PY'
+import importlib.util
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+root = Path(sys.argv[1])
+goalmeta_path = root / "scripts" / "goalmeta.py"
+heartbeat_log_path = root / "logs" / "goalloop-heartbeat.log"
+objective_re = re.compile(r"(?ms)^##\\s+Objective\\s*\\n+(.*?)(?=^\\s*##\\s+|\\Z)")
+
+spec = importlib.util.spec_from_file_location("goalmeta", goalmeta_path)
+goalmeta = importlib.util.module_from_spec(spec)
+if spec.loader is None:
+    raise RuntimeError("goalmeta loader unavailable")
+spec.loader.exec_module(goalmeta)
+
+def iso_mtime(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+def extract_objective(body: str) -> str:
+    match = objective_re.search(body)
+    return match.group(1).strip() if match else ""
+
+def collect(status_dir: str) -> list[dict]:
+    goal_dir = root / "goals" / status_dir
+    items = []
+    if not goal_dir.exists():
+        return items
+    for path in sorted(goal_dir.glob("*.md"), key=lambda value: value.stat().st_mtime, reverse=True):
+        if not path.is_file() or path.name.startswith("_"):
+            continue
+        front_matter, body = goalmeta.parse_goal(path)
+        items.append(
+            {
+                "slug": path.stem,
+                "title": str(front_matter.get("title") or path.stem),
+                "status": status_dir,
+                "priority": str(front_matter.get("priority") or "medium"),
+                "brief_status": str(front_matter.get("brief_status") or "draft"),
+                "run_state": str(front_matter.get("run_state") or "idle"),
+                "approval_policy": str(front_matter.get("approval_policy") or "auto"),
+                "heartbeat_minutes": int(front_matter.get("heartbeat_minutes") or 60),
+                "last_run": front_matter.get("last_run"),
+                "next_eligible_at": front_matter.get("next_eligible_at"),
+                "deadline_at": front_matter.get("deadline_at"),
+                "parent": front_matter.get("parent"),
+                "updated_at": iso_mtime(path),
+                "objective": extract_objective(body),
+            }
+        )
+    return items
+
+process_result = subprocess.run(
+    ["pgrep", "-af", "[g]oalloop-heartbeat.sh"],
+    capture_output=True,
+    text=True,
+    check=False,
+)
+processes = [line.strip() for line in process_result.stdout.splitlines() if line.strip()]
+log_tail = []
+if heartbeat_log_path.exists():
+    log_tail = heartbeat_log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-20:]
+
+print(
+    json.dumps(
+        {
+            "activeGoals": collect("active"),
+            "pausedGoals": collect("paused"),
+            "completedGoals": collect("completed"),
+            "heartbeat": {
+                "running": bool(processes),
+                "processes": processes,
+                "logTail": log_tail,
+            },
+        }
+    )
+)
+PY`,
+  ].join('\n')
+
+  const result = await runHostCommand(script)
+  return parseJsonStdout(result, 'GoalLoop runtime response was not valid JSON')
+}
+
+export function triggerGoalloopHeartbeat() {
+  const script = [
+    `heartbeat_script=${shellQuote(GOALLOOP_HEARTBEAT_PATH)}`,
+    `heartbeat_log=${shellQuote(`${HOST_INSTALL_DIR}/logs/goalloop-heartbeat.log`)}`,
+    'nohup bash "$heartbeat_script" >> "$heartbeat_log" 2>&1 < /dev/null &',
+    'echo "GoalLoop heartbeat triggered"',
+  ].join('\n')
+
+  return runHostCommand(script)
 }
 
 export async function getDashboardChat(limit = 200) {

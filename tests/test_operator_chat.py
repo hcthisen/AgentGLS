@@ -67,6 +67,27 @@ class OperatorChatTests(unittest.TestCase):
         self.assertIn("dashboard user's prompt stays in the dashboard only", envelope)
         self.assertIn("/opt/agentgls/goals/", envelope)
 
+    def test_recent_falls_back_to_telegram_log_when_transcript_is_empty(self):
+        log_path = self.root / "logs" / "telegram-bridge.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(
+            "\n".join(
+                [
+                    "[2026-04-08 10:59:01,904] INFO inbound chat_id=6599988942 user=Hans Thisen text=how are the goals comming along?",
+                    "[2026-04-08 10:59:24,745] INFO outbound chat_id=6599988942 chars=185 text=There is currently 1 active goal: `Opret hjemmeside på dploy.cc`.",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        transcript = self.module.read_dashboard_messages(10)
+
+        self.assertEqual(len(transcript), 2)
+        self.assertEqual(transcript[0]["origin"], "telegram_user")
+        self.assertEqual(transcript[1]["origin"], "assistant")
+        self.assertIn("Opret hjemmeside", transcript[1]["message"])
+
 
 if __name__ == "__main__":
     unittest.main()

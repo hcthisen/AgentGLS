@@ -7,6 +7,7 @@ import SecretsTab from './components/SecretsTab'
 import SettingsTab from './components/SettingsTab'
 import SetupWizard from './components/SetupWizard'
 import TerminalTab from './components/TerminalTab'
+import WorkTab from './components/WorkTab'
 
 function Stat({ label, value, status }) {
   return (
@@ -270,6 +271,7 @@ function OverviewTab({ setupState }) {
 
 const TABS = [
   { id: 'overview', label: 'overview' },
+  { id: 'work', label: 'work' },
   { id: 'goals', label: 'goals' },
   { id: 'chat', label: 'chat' },
   { id: 'company', label: 'company' },
@@ -415,6 +417,7 @@ export default function Home() {
 
       <div className="tab-content">
         {activeTab === 'overview' && <OverviewTab setupState={setupState} />}
+        {activeTab === 'work' && <WorkTab />}
         {activeTab === 'goals' && <GoalsTab />}
         {activeTab === 'chat' && <ChatTab />}
         {activeTab === 'company' && <CompanyTab setupState={setupState} onSetupUpdate={setSetupState} />}

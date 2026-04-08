@@ -18,6 +18,13 @@ dashboard/node_modules/
 logs/
 *.log
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
 # Reference repos
 Reference-Code-Repos/
 

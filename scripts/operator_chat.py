@@ -30,6 +30,7 @@ TRANSCRIPT_PATH = STATE_DIR / "messages.jsonl"
 TRANSCRIPT_LOCK_PATH = STATE_DIR / "messages.lock"
 HUMAN_CHANNEL_LOCK_PATH = STATE_DIR / "human.lock"
 ALLOWLIST_PATH = ROOT / "state" / "telegram" / "allowlist.json"
+TELEGRAM_LOG_PATH = ROOT / "logs" / "telegram-bridge.log"
 PROVIDER_RUN_SCRIPT = ROOT / "scripts" / "provider-run.sh"
 SEND_TELEGRAM_SCRIPT = ROOT / "scripts" / "send-telegram.sh"
 
@@ -44,6 +45,14 @@ GOAL_STATUS_PHRASES = [
     "how is everything progressing",
     "how is every thing progressing",
 ]
+
+LOG_LINE_RE = re.compile(r"^\[(?P<timestamp>[^\]]+)\]\s+INFO\s+(?P<body>.+)$")
+LOG_INBOUND_RE = re.compile(
+    r"^inbound chat_id=(?P<chat_id>\S+)\s+user=(?P<user>.+?)\s+text=(?P<text>.+)$"
+)
+LOG_OUTBOUND_RE = re.compile(
+    r"^outbound chat_id=(?P<chat_id>\S+)\s+chars=\S+\s+text=(?P<text>.+)$"
+)
 
 
 def lock_handle(handle) -> None:
@@ -209,7 +218,7 @@ def append_message(
 def read_dashboard_messages(limit: int = 200) -> list[dict[str, Any]]:
     ensure_layout()
     if not TRANSCRIPT_PATH.exists():
-        return []
+        return read_log_backfill(limit)
 
     messages: list[dict[str, Any]] = []
     for raw_line in TRANSCRIPT_PATH.read_text(encoding="utf-8").splitlines():
@@ -226,7 +235,62 @@ def read_dashboard_messages(limit: int = 200) -> list[dict[str, Any]]:
             continue
         messages.append(payload)
 
+    if not messages:
+        return read_log_backfill(limit)
     return messages[-max(limit, 1) :]
+
+
+def read_log_backfill(limit: int = 200) -> list[dict[str, Any]]:
+    if not TELEGRAM_LOG_PATH.exists():
+        return []
+
+    fallback: list[dict[str, Any]] = []
+    lines = TELEGRAM_LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
+    for raw_line in lines[-max(limit * 3, 60) :]:
+        match = LOG_LINE_RE.match(raw_line.strip())
+        if not match:
+            continue
+        timestamp = match.group("timestamp").replace(" ", "T", 1) + "Z"
+        body = match.group("body")
+
+        inbound = LOG_INBOUND_RE.match(body)
+        if inbound:
+            fallback.append(
+                {
+                    "id": f"log-inbound-{len(fallback)}",
+                    "created_at": timestamp,
+                    "origin": "telegram_user",
+                    "role": "user",
+                    "author": inbound.group("user").strip(),
+                    "message": inbound.group("text").strip(),
+                    "chat_id": inbound.group("chat_id").strip(),
+                    "username": "",
+                    "chat_type": "private",
+                    "visible_in_dashboard": True,
+                    "visible_in_telegram": True,
+                }
+            )
+            continue
+
+        outbound = LOG_OUTBOUND_RE.match(body)
+        if outbound:
+            fallback.append(
+                {
+                    "id": f"log-outbound-{len(fallback)}",
+                    "created_at": timestamp,
+                    "origin": "assistant",
+                    "role": "assistant",
+                    "author": "AgentGLS",
+                    "message": outbound.group("text").strip(),
+                    "chat_id": outbound.group("chat_id").strip(),
+                    "username": "",
+                    "chat_type": "private",
+                    "visible_in_dashboard": True,
+                    "visible_in_telegram": True,
+                }
+            )
+
+    return fallback[-max(limit, 1) :]
 
 
 def build_prompt_envelope(source: str, text: str, metadata: dict[str, Any] | None = None) -> str:

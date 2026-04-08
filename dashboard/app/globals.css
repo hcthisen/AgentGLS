@@ -888,8 +888,66 @@ tr:hover td {
 }
 
 .chat-compose {
+  display: grid;
+  gap: 0.65rem;
   border-top: 1px solid var(--border);
   padding-top: 0.9rem;
+}
+
+.chat-compose textarea {
+  width: 100%;
+  min-height: 7.5rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  outline: none;
+  resize: vertical;
+}
+
+.chat-compose textarea:focus {
+  border-color: var(--blue);
+}
+
+.company-context-editor {
+  width: 100%;
+  min-height: 20rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  outline: none;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.company-context-editor:focus {
+  border-color: var(--blue);
+}
+
+.work-subsection {
+  margin-top: 1rem;
+}
+
+.work-log {
+  margin-top: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 22rem;
+  overflow-y: auto;
 }
 
 /* Secrets Form */
