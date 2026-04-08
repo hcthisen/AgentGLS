@@ -9,8 +9,10 @@ const SSH_KEY_PATH = '/ssh-key/id_ed25519'
 const HOST_INSTALL_DIR = '/opt/agentgls'
 const PROVIDER_LIB_PATH = `${HOST_INSTALL_DIR}/scripts/provider-lib.sh`
 const PROVIDER_AUTH_SCRIPT_PATH = `${HOST_INSTALL_DIR}/scripts/provider-auth.py`
+const OPERATOR_CHAT_PATH = `${HOST_INSTALL_DIR}/scripts/operator_chat.py`
 const TELEGRAM_BRIDGE_PATH = `${HOST_INSTALL_DIR}/scripts/telegram-bridge.py`
 const TELEGRAM_LOG_PATH = `${HOST_INSTALL_DIR}/logs/telegram-bridge.log`
+const GOALLOOP_SYNC_PATH = `${HOST_INSTALL_DIR}/scripts/goalloop-sync.sh`
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
@@ -223,4 +225,42 @@ PY`,
     'if ! sudo systemctl reload caddy >/dev/null 2>&1; then if ! sudo caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then echo "Failed to reload Caddy" >&2; exit 1; fi; fi',
   ].join('\n')
   return runHostCommand(script)
+}
+
+export function waitForHttpsHost(domain) {
+  const script = [
+    `host=${shellQuote(domain)}`,
+    'for attempt in $(seq 1 24); do',
+    '  if curl -fsS --connect-timeout 5 --max-time 10 "https://$host" >/dev/null 2>&1; then',
+    '    echo "https ready"',
+    '    exit 0',
+    '  fi',
+    '  sleep 5',
+    'done',
+    'echo "HTTPS did not become ready in time" >&2',
+    'exit 1',
+  ].join('\n')
+
+  return runHostCommand(script)
+}
+
+export function runGoalSync() {
+  return runHostCommand(`bash ${shellQuote(GOALLOOP_SYNC_PATH)}`)
+}
+
+export async function getDashboardChat(limit = 200) {
+  const normalizedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.trunc(limit))) : 200
+  const result = await runHostCommand(
+    `python3 ${shellQuote(OPERATOR_CHAT_PATH)} recent --limit ${normalizedLimit}`
+  )
+  return parseJsonStdout(result, 'Dashboard chat response was not valid JSON')
+}
+
+export async function sendDashboardChatMessage(text, displayName = '') {
+  const payload = JSON.stringify({ text, display_name: displayName })
+  const result = await runHostCommand(
+    `python3 ${shellQuote(OPERATOR_CHAT_PATH)} send-dashboard`,
+    { stdin: payload }
+  )
+  return parseJsonStdout(result, 'Dashboard chat send response was not valid JSON')
 }

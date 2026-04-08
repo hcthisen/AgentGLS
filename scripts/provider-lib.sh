@@ -19,6 +19,24 @@ load_agentgls_env() {
     source "$env_file"
     set +a
   fi
+
+  provider_prepare_path
+}
+
+provider_prepare_path() {
+  local current_local_bin="${HOME:-}/.local/bin"
+  local agentgls_home="/home/${AGENTGLS_USER:-agentgls}"
+  local agentgls_local_bin="$agentgls_home/.local/bin"
+
+  if [[ -d "$current_local_bin" && ":$PATH:" != *":$current_local_bin:"* ]]; then
+    PATH="$current_local_bin:$PATH"
+  fi
+
+  if [[ -d "$agentgls_local_bin" && ":$PATH:" != *":$agentgls_local_bin:"* ]]; then
+    PATH="$agentgls_local_bin:$PATH"
+  fi
+
+  export PATH
 }
 
 resolve_active_provider() {

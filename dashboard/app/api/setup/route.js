@@ -1,11 +1,17 @@
 import { createHash } from 'crypto'
 import dns from 'dns/promises'
 import { NextResponse } from 'next/server'
-import { buildSessionToken, requireSetupAccess, sessionCookieOptions } from '../../lib/auth'
+import {
+  buildSessionToken,
+  getDashboardAuthConfig,
+  requireSetupAccess,
+  sessionCookieOptions,
+} from '../../lib/auth'
 import {
   approveTelegramPair,
   cancelProviderAuth,
   configureCaddy,
+  runGoalSync,
   startProviderAuth,
   probeProviderScript,
   runProviderScript,
@@ -13,6 +19,7 @@ import {
   submitProviderAuthCode,
   startTelegramBridge,
   stopTelegramBridge,
+  waitForHttpsHost,
 } from '../../lib/host-control'
 import { getSetupState } from '../../lib/setup-state'
 
@@ -166,12 +173,17 @@ export async function POST(request) {
       const name = String(body.name || '').trim()
       const email = String(body.email || '').trim().toLowerCase()
       const password = String(body.password || '')
+      const existingConfig = getDashboardAuthConfig()
+      const passwordHash = password
+        ? createHash('sha256').update(password).digest('hex')
+        : existingConfig.passwordHash
 
-      if (!name || !email || !password) {
-        return invalid('Name, email, and password are required')
+      if (!name || !email) {
+        return invalid('Name and email are required')
       }
-
-      const passwordHash = createHash('sha256').update(password).digest('hex')
+      if (!passwordHash) {
+        return invalid('Password is required when the admin account is created')
+      }
       await runSetupAction('set-admin', { name, email, password_hash: passwordHash })
 
       const sessionToken = buildSessionToken()
@@ -273,15 +285,39 @@ export async function POST(request) {
         return invalid('Dashboard host is required unless skipped')
       }
 
+      if (!skip && host) {
+        const [expectedIp, addresses] = await Promise.all([
+          getPublicIp(),
+          dns.resolve4(host).catch(() => []),
+        ])
+
+        if (!addresses.includes(expectedIp)) {
+          return NextResponse.json(
+            {
+              error: `${host} must resolve to ${expectedIp} before Caddy can be activated`,
+              host,
+              expectedIp,
+              addresses,
+              matches: false,
+            },
+            { status: 400 }
+          )
+        }
+      }
+
       await runSetupAction('set-domain', skip ? { skip: true } : { host })
 
       let caddyMessage = ''
       if (!skip && host) {
         try {
           await configureCaddy(host)
+          await waitForHttpsHost(host)
           caddyMessage = `Caddy configured for ${host}`
         } catch (error) {
-          caddyMessage = error instanceof Error ? error.message : 'Failed to configure Caddy'
+          return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Failed to configure Caddy' },
+            { status: 500 }
+          )
         }
       }
 
@@ -349,7 +385,25 @@ export async function POST(request) {
       }
 
       await runSetupAction('create-goal', { title, summary })
-      return setupResponse()
+      let syncMessage = ''
+      try {
+        const syncResult = await runGoalSync()
+        syncMessage = syncResult.stdout || syncResult.stderr || 'Goal projection synced'
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : 'Goal created but sync failed' },
+          { status: 500 }
+        )
+      }
+
+      return setupResponse({ syncMessage })
+    }
+
+    if (action === 'sync_goals') {
+      const syncResult = await runGoalSync()
+      return setupResponse({
+        syncMessage: syncResult.stdout || syncResult.stderr || 'Goal projection synced',
+      })
     }
 
     return invalid('Unknown setup action')

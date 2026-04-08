@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -24,11 +25,13 @@ ACTIVE_GOALS_DIR = GOALS_DIR / "active"
 TEMPLATES_DIR = GOALS_DIR / "templates"
 RUNBOOK_PATH = GOALS_DIR / "_runbook.md"
 CONTEXT_PATH = GOALS_DIR / "_context.md"
+GOALMETA_PATH = ROOT / "scripts" / "goalmeta.py"
 
 ENV_ORDER = [
     "AGENTGLS_DASHBOARD_HOST",
     "AGENTGLS_DOMAIN",
     "AGENTGLS_PROVIDER",
+    "AGENTGLS_PROVIDER_BYPASS_APPROVALS",
     "AGENTGLS_ADMIN_NAME",
     "AGENTGLS_ADMIN_EMAIL",
     "AGENTGLS_DOMAIN_SKIPPED",
@@ -151,8 +154,32 @@ def find_first_goal() -> Path | None:
     return goals[0] if goals else None
 
 
+def find_goal_by_slug(slug: str) -> Path | None:
+    normalized = slug.strip()
+    if not normalized:
+        return None
+
+    for directory in ("active", "paused", "completed"):
+        candidate = GOALS_DIR / directory / f"{normalized}.md"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def context_configured() -> bool:
     return CONTEXT_PATH.exists() and bool(CONTEXT_PATH.read_text(encoding="utf-8").strip())
+
+
+def goalmeta(*args: str) -> str:
+    result = subprocess.run(
+        [sys.executable, str(GOALMETA_PATH), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or result.stdout.strip() or "goalmeta failed")
+    return result.stdout.strip()
 
 
 def set_admin() -> None:
@@ -285,6 +312,33 @@ def create_goal() -> None:
     goal_path.write_text(front_matter + body, encoding="utf-8")
 
 
+def approve_goal() -> None:
+    data = read_json_stdin()
+    slug = str(data.get("slug", "")).strip()
+    if not slug:
+        raise SystemExit("slug is required")
+
+    goal_path = find_goal_by_slug(slug)
+    if goal_path is None:
+        raise SystemExit(f"goal not found: {slug}")
+    if goal_path.parent != ACTIVE_GOALS_DIR:
+        raise SystemExit("only active goals can be approved from the dashboard")
+
+    goalmeta("set", str(goal_path), "brief_status", "approved")
+    approval_policy = goalmeta("get", str(goal_path), "approval_policy").strip().lower()
+    if approval_policy == "manual":
+        goalmeta("set", str(goal_path), "approved_for_next_run", "true")
+
+    json.dump(
+        {
+            "slug": slug,
+            "path": str(goal_path),
+            "approval_policy": approval_policy or "auto",
+        },
+        sys.stdout,
+    )
+
+
 def status() -> None:
     ensure_goal_dirs()
     env = load_env()
@@ -327,6 +381,7 @@ def main() -> None:
             "set-telegram",
             "write-context",
             "create-goal",
+            "approve-goal",
             "status",
             "password-hash",
         ],
@@ -342,6 +397,7 @@ def main() -> None:
         "set-telegram": set_telegram,
         "write-context": write_context,
         "create-goal": create_goal,
+        "approve-goal": approve_goal,
         "status": status,
         "password-hash": password_hash,
     }

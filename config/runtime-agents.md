@@ -47,8 +47,24 @@ You may edit the markdown body directly, but do not hand-edit front matter.
 - Telegram ingress and egress are provider-neutral.
 - Inbound human messages arrive through `telegram-bridge.py`.
 - Outbound Telegram delivery is handled by `bash /opt/agentgls/scripts/send-telegram.sh <chat_id> "<text>"`.
+- You are running on the live VPS and should assume normal shell and filesystem access inside `/opt/agentgls` unless a command actually fails.
 - Reply to the human directly and keep the answer concise unless they ask for depth.
 - Do not tell the model to send its own Telegram message. The bridge delivers outbound text.
+- Do not claim that shell access, runtime access, or live goal access is blocked unless you actually attempted the relevant command and it failed.
+- If a direct check fails, name the command or file path that failed instead of giving a generic capability disclaimer.
+
+### Goal Status Requests From Human Chat
+
+- Treat natural-language progress questions as goal-status requests.
+- Examples:
+  - `How are the goals coming along?`
+  - `What is the status of the current goals?`
+  - `How is everything progressing?`
+  - `Give me a goal update`
+- For these requests, inspect the live goal files under `/opt/agentgls/goals/` and summarize the current state directly.
+- Check `active/`, `paused/`, and `completed/` as needed. Use `goalmeta.py`, the goal markdown files, `_context.md`, `_runbook.md`, and recent run logs if relevant.
+- Prefer a real status summary over asking the human to rephrase to `Goal status`.
+- When summarizing goals, include the goal title, current state, what was last completed, and the next blocker or next step when that information is available.
 
 ### Draft, Approve, Manual-Run, Pause, Resume
 

@@ -2,5 +2,9 @@
 import TerminalPane from './TerminalPane'
 
 export default function TerminalTab() {
-  return <TerminalPane />
+  return (
+    <div className="terminal-tab-shell">
+      <TerminalPane className="terminal-pane-fill" />
+    </div>
+  )
 }

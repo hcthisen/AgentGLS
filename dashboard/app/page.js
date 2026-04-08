@@ -1,7 +1,10 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import ChatTab from './components/ChatTab'
+import CompanyTab from './components/CompanyTab'
 import GoalsTab from './components/GoalsTab'
 import SecretsTab from './components/SecretsTab'
+import SettingsTab from './components/SettingsTab'
 import SetupWizard from './components/SetupWizard'
 import TerminalTab from './components/TerminalTab'
 
@@ -268,8 +271,11 @@ function OverviewTab({ setupState }) {
 const TABS = [
   { id: 'overview', label: 'overview' },
   { id: 'goals', label: 'goals' },
+  { id: 'chat', label: 'chat' },
+  { id: 'company', label: 'company' },
   { id: 'secrets', label: 'secrets' },
   { id: 'terminal', label: 'terminal' },
+  { id: 'settings', label: 'settings' },
 ]
 
 export default function Home() {
@@ -278,6 +284,7 @@ export default function Home() {
   const [setupState, setSetupState] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
+  const [redirectTarget, setRedirectTarget] = useState('')
 
   const loadState = useCallback(async () => {
     setLoading(true)
@@ -309,7 +316,33 @@ export default function Home() {
     loadState()
   }, [loadState])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const configuredHost = String(setupState?.domain?.value || '').trim().toLowerCase()
+    const completed = Boolean(setupState?.completed)
+    const currentHost = window.location.hostname.toLowerCase()
+    const isLocalHost =
+      currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '::1'
+
+    if (!authenticated || !completed || !configuredHost || currentHost === configuredHost || isLocalHost) {
+      setRedirectTarget('')
+      return undefined
+    }
+
+    const target = `https://${configuredHost}`
+    setRedirectTarget(target)
+    const timer = window.setTimeout(() => {
+      window.location.assign(target)
+    }, 1200)
+
+    return () => window.clearTimeout(timer)
+  }, [authenticated, setupState?.completed, setupState?.domain?.value])
+
   if (loading) return <div className="loading">...</div>
+  if (redirectTarget) {
+    return <div className="loading">redirecting to {redirectTarget}...</div>
+  }
 
   const handleLogout = () => {
     document.cookie = 'dashboard_session=; Max-Age=0; path=/'
@@ -383,8 +416,11 @@ export default function Home() {
       <div className="tab-content">
         {activeTab === 'overview' && <OverviewTab setupState={setupState} />}
         {activeTab === 'goals' && <GoalsTab />}
+        {activeTab === 'chat' && <ChatTab />}
+        {activeTab === 'company' && <CompanyTab setupState={setupState} onSetupUpdate={setSetupState} />}
         {activeTab === 'secrets' && <SecretsTab />}
         {activeTab === 'terminal' && <TerminalTab />}
+        {activeTab === 'settings' && <SettingsTab setupState={setupState} onSetupUpdate={setSetupState} />}
       </div>
     </div>
   )

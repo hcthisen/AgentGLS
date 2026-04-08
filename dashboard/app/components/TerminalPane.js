@@ -7,6 +7,7 @@ export default function TerminalPane({ className = '' }) {
   const xtermRef = useRef(null)
   const fitRef = useRef(null)
   const resizeCleanupRef = useRef(null)
+  const observerRef = useRef(null)
   const [status, setStatus] = useState('disconnected')
 
   const resolveWebSocketUrl = useCallback(() => {
@@ -33,6 +34,10 @@ export default function TerminalPane({ className = '' }) {
     if (resizeCleanupRef.current) {
       resizeCleanupRef.current()
       resizeCleanupRef.current = null
+    }
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
     }
     if (xtermRef.current) {
       xtermRef.current.dispose()
@@ -79,6 +84,7 @@ export default function TerminalPane({ className = '' }) {
       fontSize: 13,
       cursorBlink: true,
       convertEol: true,
+      scrollback: 5000,
     })
 
     const fit = new FitAddon()
@@ -144,6 +150,15 @@ export default function TerminalPane({ className = '' }) {
     term.onResize(sendResize)
     window.addEventListener('resize', handleResize)
     resizeCleanupRef.current = () => window.removeEventListener('resize', handleResize)
+
+    if (typeof ResizeObserver !== 'undefined' && termRef.current) {
+      const observer = new ResizeObserver(() => {
+        fit.fit()
+        sendResize()
+      })
+      observer.observe(termRef.current)
+      observerRef.current = observer
+    }
   }, [resolveWebSocketUrl, teardown])
 
   useEffect(() => {

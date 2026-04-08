@@ -11,12 +11,13 @@ import random
 import re
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+from operator_chat import append_message, deliver_reply_to_telegram, process_human_message
 
 
 ROOT = Path(os.environ.get("AGENTGLS_DIR", "/opt/agentgls"))
@@ -26,7 +27,6 @@ ALLOWLIST_PATH = STATE_DIR / "allowlist.json"
 PENDING_PATH = STATE_DIR / "pending.json"
 OFFSET_PATH = STATE_DIR / "update-offset.txt"
 LOG_PATH = ROOT / "logs" / "telegram-bridge.log"
-PROVIDER_RUN_SCRIPT = ROOT / "scripts" / "provider-run.sh"
 SEND_TELEGRAM_SCRIPT = ROOT / "scripts" / "send-telegram.sh"
 
 PAIR_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -306,61 +306,6 @@ def send_text(chat_id: str, text: str) -> None:
         raise RuntimeError(detail)
 
 
-def build_prompt_envelope(chat_id: str, chat: dict[str, Any], text: str) -> str:
-    metadata = chat_metadata(chat)
-    username_line = metadata["username"] or "(none)"
-
-    return (
-        "source = Telegram\n"
-        f"chat_id = {chat_id}\n"
-        f"chat_type = {metadata['chat_type'] or 'private'}\n"
-        f"display_name = {metadata['display_name']}\n"
-        f"username = {username_line}\n"
-        f"received_at_utc = {utc_now()}\n\n"
-        "message_text = <<EOF\n"
-        f"{text}\n"
-        "EOF\n\n"
-        "Instructions:\n"
-        "- Answer the human directly.\n"
-        "- Keep the reply concise unless they explicitly ask for more detail.\n"
-        "- Outbound Telegram delivery is handled by the bridge, not by you.\n"
-        "- Reply with the message body only.\n"
-    )
-
-
-def run_provider_for_message(chat_id: str, chat: dict[str, Any], text: str) -> str:
-    if not PROVIDER_RUN_SCRIPT.exists():
-        raise RuntimeError(f"Missing provider runner: {PROVIDER_RUN_SCRIPT}")
-
-    prompt = build_prompt_envelope(chat_id, chat, text)
-    prompt_path = None
-
-    try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-            handle.write(prompt)
-            prompt_path = handle.name
-
-        result = subprocess.run(
-            ["bash", str(PROVIDER_RUN_SCRIPT), "human", prompt_path],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    finally:
-        if prompt_path:
-            try:
-                os.unlink(prompt_path)
-            except OSError:
-                pass
-
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or f"provider-run exited {result.returncode}"
-        raise RuntimeError(detail)
-
-    reply = result.stdout.strip()
-    return reply or "I ran the request but did not get a reply back."
-
-
 def handle_unpaired_message(chat_id: str, chat: dict[str, Any], text: str) -> None:
     entry, created = register_pending_chat(chat_id, chat)
     pair_code = entry["code"]
@@ -384,29 +329,41 @@ def handle_unpaired_message(chat_id: str, chat: dict[str, Any], text: str) -> No
 def handle_allowlisted_message(chat_id: str, chat: dict[str, Any], text: str) -> None:
     update_allowlist_metadata(chat_id, chat)
     clear_pending_chat(chat_id)
+    metadata = chat_metadata(chat)
     LOGGER.info(
         "inbound chat_id=%s user=%s text=%s",
         chat_id,
-        chat_display_name(chat),
+        metadata["display_name"],
         sanitize_excerpt(text),
     )
 
     try:
-        reply = run_provider_for_message(chat_id, chat, text)
+        result = process_human_message(
+            "telegram",
+            text,
+            {
+                "chat_id": chat_id,
+                "chat_type": metadata["chat_type"] or "private",
+                "display_name": metadata["display_name"],
+                "username": metadata["username"] or "(none)",
+            },
+        )
+        reply = result["reply"]
     except Exception as exc:
         LOGGER.error("provider_error chat_id=%s detail=%s", chat_id, str(exc))
         reply = "The assistant hit an execution error before replying. Please try again in a moment."
+        append_message("assistant", reply, display_name="AgentGLS")
 
-    try:
-        send_text(chat_id, reply)
+    delivery = deliver_reply_to_telegram("telegram", reply, chat_id=chat_id)
+    if delivery["delivered_chat_ids"]:
         LOGGER.info(
             "outbound chat_id=%s chars=%s text=%s",
             chat_id,
             len(reply),
             sanitize_excerpt(reply),
         )
-    except Exception as exc:
-        LOGGER.error("send_error chat_id=%s detail=%s", chat_id, str(exc))
+    for error in delivery["delivery_errors"]:
+        LOGGER.error("send_error chat_id=%s detail=%s", chat_id, error)
 
 
 def process_message(message: dict[str, Any]) -> None:

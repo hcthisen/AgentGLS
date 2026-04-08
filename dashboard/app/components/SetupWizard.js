@@ -343,6 +343,11 @@ export default function SetupWizard({
   const providerAuthStatus = providerSaved
     ? setupState?.provider?.authStatus || 'pending'
     : 'save this provider to start browser-based authorization'
+  const normalizedDomain = compact(domain).toLowerCase()
+  const canSaveDomain =
+    Boolean(normalizedDomain) &&
+    domainResult?.host === normalizedDomain &&
+    Boolean(domainResult?.matches)
 
   async function syncSetupState() {
     const res = await fetch('/api/setup', { cache: 'no-store' })
@@ -1029,11 +1034,17 @@ export default function SetupWizard({
                   type="text"
                   placeholder="dashboard.example.com"
                   value={domain}
-                  onChange={(event) => setDomain(event.target.value)}
+                  onChange={(event) => {
+                    setDomain(event.target.value)
+                    setDomainResult(null)
+                  }}
                 />
                 <div className="setup-copy">
                   Save the exact public hostname you want to use for the dashboard and terminal
                   websocket. Skip this if you want to keep using the raw IP during bring-up.
+                </div>
+                <div className="setup-copy">
+                  Custom hosts must pass the DNS check first. AgentGLS will only activate Caddy after the hostname resolves to this VPS.
                 </div>
                 {domainResult && (
                   <div className={`setup-banner ${domainResult.matches ? 'ok' : 'warn'}`}>
@@ -1046,7 +1057,7 @@ export default function SetupWizard({
                   <button
                     type="button"
                     className="btn-sm"
-                    disabled={busyAction === 'check_domain' || !domain.trim()}
+                    disabled={busyAction === 'check_domain' || !normalizedDomain}
                     onClick={checkDomain}
                   >
                     {busyAction === 'check_domain' ? 'checking...' : 'check dns'}
@@ -1054,7 +1065,7 @@ export default function SetupWizard({
                   <button
                     type="button"
                     className="btn-action"
-                    disabled={busyAction === 'set_domain' || !domain.trim()}
+                    disabled={busyAction === 'set_domain' || !canSaveDomain}
                     onClick={() =>
                       executeSetupAction(
                         'set_domain',
